@@ -344,9 +344,10 @@ Comparability caveat: the published korabench numbers use `gpt-5.2:medium:limite
 
 Notes for self-hosted thinking models:
 
-- `<PREFIX>_MAX_TOKENS` (e.g. `VLLM_MAX_TOKENS`) caps generation length for every slug-form call against that provider — set this when the model can otherwise emit unbounded `<think>` traces and stall the run.
+- `<PREFIX>_MAX_TOKENS` (e.g. `VLLM_MAX_TOKENS`) caps generation length for every slug-form call against that provider — set this when the model can otherwise emit unbounded `<think>` traces and stall the run. This single cap governs *all* call sites (user-message generation, target assistant responses, and judge structured-output calls); kora no longer applies its own per-site caps, so reasoning models always get the full budget to think before answering.
 - **Size the cap for thinking models.** Reasoning + the JSON answer share this budget. For Qwen3-30B-A3B-Thinking, reasoning traces routinely consume 4–12k tokens before the structured answer; complex schemas like `MechanismAssessment` add another 1–2k. Use **32768** as a comfortable default, or 65536 for belt-and-suspenders. Setting it near the model's `max_model_len` (e.g. 131072) will cause vLLM to reject any request whose `prompt_tokens + max_tokens` exceeds the context window.
 - A request that hits the cap mid-output finishes with `finish_reason="length"` and returns truncated JSON. With server-side `json_schema` enforcement, that means a malformed object → Valibot validation failure → retry. If you see retries logged for `length`-truncated responses, raise the cap.
+- The vllm provider opts into `response_format: { type: "json_schema" }` (see `supportsStructuredOutputs` in the registry), so the judge's Valibot schemas are enforced server-side by vLLM's xgrammar. Without this, the SDK would fall back to schema-less `json_object` mode and strict schemas (e.g. `MechanismAssessment`'s required M1–M7 keys) would fail validation in a retry loop.
 - The HTTP client uses a 4-hour header/body timeout (instead of undici's 10s default), so a deep reasoning trace with slow first-token latency won't drop mid-completion.
 - For per-model `maxTokens` / `temperature` / `providerOptions`, prefer the `models.json` form above — it overrides the env-level `<PREFIX>_MAX_TOKENS` cap.
 
