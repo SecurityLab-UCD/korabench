@@ -317,7 +317,7 @@ Comparability caveat: the published korabench numbers use `gpt-5.2:medium:limite
     ```bash
     export VLLM_BASE_URL=http://localhost:8081/v1
     export VLLM_API_KEY=soulfuzz101            # whatever you passed to `vllm serve`
-    export VLLM_MAX_TOKENS=8192                # optional cap; recommended for thinking models
+    export VLLM_MAX_TOKENS=32768               # reasoning + JSON answer share this budget; see note below
     ```
 
 3.  **Smoke-test with `--limit 1`** before launching the full sweep:
@@ -345,6 +345,8 @@ Comparability caveat: the published korabench numbers use `gpt-5.2:medium:limite
 Notes for self-hosted thinking models:
 
 - `<PREFIX>_MAX_TOKENS` (e.g. `VLLM_MAX_TOKENS`) caps generation length for every slug-form call against that provider — set this when the model can otherwise emit unbounded `<think>` traces and stall the run.
+- **Size the cap for thinking models.** Reasoning + the JSON answer share this budget. For Qwen3-30B-A3B-Thinking, reasoning traces routinely consume 4–12k tokens before the structured answer; complex schemas like `MechanismAssessment` add another 1–2k. Use **32768** as a comfortable default, or 65536 for belt-and-suspenders. Setting it near the model's `max_model_len` (e.g. 131072) will cause vLLM to reject any request whose `prompt_tokens + max_tokens` exceeds the context window.
+- A request that hits the cap mid-output finishes with `finish_reason="length"` and returns truncated JSON. With server-side `json_schema` enforcement, that means a malformed object → Valibot validation failure → retry. If you see retries logged for `length`-truncated responses, raise the cap.
 - The HTTP client uses a 4-hour header/body timeout (instead of undici's 10s default), so a deep reasoning trace with slow first-token latency won't drop mid-completion.
 - For per-model `maxTokens` / `temperature` / `providerOptions`, prefer the `models.json` form above — it overrides the env-level `<PREFIX>_MAX_TOKENS` cap.
 
