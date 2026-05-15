@@ -296,6 +296,7 @@ The model id may contain `/` (HuggingFace-style namespaces) — the slug is spli
 | `baseURLEnv`  | Either `baseURL` _or_ `baseURLEnv` (exactly one)            | Env var holding the endpoint URL — preferred for local dev.                |
 | `apiKey`      | Either `apiKey` _or_ `apiKeyEnv` (exactly one)              | Bearer token (discouraged inline; commit hooks may flag it).               |
 | `apiKeyEnv`   | Either `apiKey` _or_ `apiKeyEnv` (exactly one)              | Env var holding the bearer token.                                          |
+| `supportsStructuredOutputs` | No (defaults to provider built-in; `true` for vllm) | Forward the full JSON Schema via `response_format: { type: "json_schema" }` for server-side enforcement. Set `false` if the server only supports `json_object` mode. |
 
 Comparability caveat: the published korabench numbers use `gpt-5.2:medium:limited` as the judge. Swapping in a local judge changes the metric — validate on a small subset against the default judge before reporting cross-paper numbers.
 

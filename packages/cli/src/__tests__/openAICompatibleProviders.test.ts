@@ -35,6 +35,11 @@ describe("parseProviderSlug", () => {
   it("returns undefined for leading-slash slug", () => {
     expect(parseProviderSlug("/Qwen3-30B")).toBeUndefined();
   });
+
+  it("marks vllm as supporting structured outputs (json_schema response_format)", () => {
+    const parsed = parseProviderSlug("vllm/whatever");
+    expect(parsed!.provider.supportsStructuredOutputs).toBe(true);
+  });
 });
 
 describe("resolveProviderConnection", () => {

@@ -30,6 +30,15 @@ export interface OpenAICompatibleProvider {
   readonly apiKeyEnv: string;
   /** When true, an empty/missing API key is acceptable (sent as "EMPTY"). */
   readonly apiKeyOptional?: boolean;
+  /**
+   * When true, the server supports `response_format: { type: "json_schema",
+   * json_schema: { ... } }` and the AI SDK will forward the full schema for
+   * server-side enforcement. When false (or omitted), the SDK falls back to
+   * `response_format: { type: "json_object" }`, which produces *some* JSON
+   * but does not constrain its shape — strict Valibot schemas with required
+   * keys / length bounds will fail validation and trigger retries.
+   */
+  readonly supportsStructuredOutputs?: boolean;
 }
 
 const PROVIDERS: readonly OpenAICompatibleProvider[] = [
@@ -38,6 +47,7 @@ const PROVIDERS: readonly OpenAICompatibleProvider[] = [
     baseURLEnv: "VLLM_BASE_URL",
     apiKeyEnv: "VLLM_API_KEY",
     apiKeyOptional: true,
+    supportsStructuredOutputs: true,
   },
 ];
 
