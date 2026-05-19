@@ -255,7 +255,16 @@ Authentication is handled via the `AI_GATEWAY_API_KEY` environment variable.
 
 ### OpenAI-compatible providers (vLLM, …)
 
-Any model server that exposes the OpenAI Chat Completions API can be used as the target, judge, or user model. The current built-in provider is **vLLM**; the registry in `packages/cli/src/models/openAICompatibleProviders.ts` is one-line-per-provider, with a TODO list covering SGLang, Ollama, LM Studio, llama.cpp, Together, Fireworks, Groq, DeepInfra, OpenRouter, Perplexity, Cerebras, Mistral, and Anyscale.
+Any model server that exposes the OpenAI Chat Completions API can be used as the target, judge, or user model. Built-in providers are **vLLM** (`vllm/...`) and **OpenAI direct** (`openai/...`, hitting `api.openai.com` without the gateway); the registry in `packages/cli/src/models/openAICompatibleProviders.ts` is one-line-per-provider, with a TODO list covering SGLang, Ollama, LM Studio, llama.cpp, Together, Fireworks, Groq, DeepInfra, OpenRouter, Perplexity, Cerebras, Mistral, and Anyscale.
+
+Quick OpenAI direct example (no `models.json` entry needed):
+
+```bash
+export OPENAI_API_KEY=sk-...
+yarn kora run openai/gpt-5-nano --judges openai/gpt-5-nano --limit 1
+```
+
+`openai/<model>` routes to `https://api.openai.com/v1` by default; set `OPENAI_BASE_URL` to point at an OpenAI-compatible proxy. Gateway-routed OpenAI models (e.g., `gpt-4o`, `gpt-5.2:high`) are still addressed by their named entries in `models.json`.
 
 There are two ways to address an OpenAI-compatible model:
 
