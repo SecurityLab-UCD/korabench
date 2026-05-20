@@ -25,7 +25,16 @@ describe("parseProviderSlug", () => {
   });
 
   it("returns undefined for slug with unknown prefix", () => {
-    expect(parseProviderSlug("openai/gpt-4o")).toBeUndefined();
+    expect(parseProviderSlug("nonprovider/some-model")).toBeUndefined();
+  });
+
+  it("resolves the openai prefix to api.openai.com by default", () => {
+    const parsed = parseProviderSlug("openai/gpt-5-nano");
+    expect(parsed).toBeDefined();
+    expect(parsed!.modelId).toBe("gpt-5-nano");
+    expect(parsed!.provider.defaultBaseURL).toBe("https://api.openai.com/v1");
+    expect(parsed!.provider.apiKeyEnv).toBe("OPENAI_API_KEY");
+    expect(parsed!.provider.supportsStructuredOutputs).toBe(true);
   });
 
   it("returns undefined for trailing-slash slug", () => {
