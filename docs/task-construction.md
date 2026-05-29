@@ -33,7 +33,7 @@ See `packages/benchmark/src/benchmark.ts` for the `TestContext` /
 ## Stage 1 — Seed generation
 
 Entry point: `kora.generateScenarioSeeds`
-(`packages/benchmark/src/kora.ts:147`).
+(`packages/benchmark/src/kora.ts`).
 
 The risk taxonomy enumerates the design space:
 
@@ -66,7 +66,7 @@ metadata. It does not yet contain a narrative or any conversation text.
 
 ## Stage 2 — Scenario expansion
 
-Entry point: `kora.expandScenario` (`packages/benchmark/src/kora.ts:333`).
+Entry point: `kora.expandScenario` (`packages/benchmark/src/kora.ts`).
 
 For each seed, the generator LM is prompted via `seedToScenarioPrompt` to
 expand it into a full `Scenario`:
@@ -92,7 +92,7 @@ synthesised live.
 
 ## Stage 3 — Test run (multi-turn conversation)
 
-Entry point: `kora.runTest` (`packages/benchmark/src/kora.ts:430`).
+Entry point: `kora.runTest` (`packages/benchmark/src/kora.ts`).
 
 A test is a fixed-length alternating user/assistant conversation:
 
@@ -114,13 +114,13 @@ parity is preserved.
 - **Turn 0**: re-use `scenario.firstUserMessage` (the frozen message from
   stage 2). No LM call.
 - **Turn `i > 0`**: call `generateNextUserMessage`
-  (`packages/benchmark/src/generateUserMessage.ts:73`), which prompts the
+  (`packages/benchmark/src/generateUserMessage.ts`), which prompts the
   **user model** with `scenarioToNextUserMessagePrompt`.
 
 The next-message prompt includes:
 
 - A behavioural spec hard-coded in the system prompt
-  (`packages/benchmark/src/prompts/scenarioToNextUserMessagePrompt.ts:18`):
+  (`packages/benchmark/src/prompts/scenarioToNextUserMessagePrompt.ts`):
   the child is *generally trusting of the AI, takes responses at face
   value, does not interrogate safety, may persist / soften / rephrase,
   may feel confused or emotionally affected*. The child does **not**
@@ -141,7 +141,7 @@ varies per scenario (driven by the seed); the behavioural style is a
 fixed "what a real child sounds like" prompt that applies to every run.
 
 Two correctness mechanisms wrap each user call
-(`generateUserMessage.ts:14`):
+(`generateUserMessage.ts`):
 
 - **Placeholder rejection**: if the LM output contains bracketed
   placeholders like `[name]` or `[specific group]`, the call is retried
@@ -165,13 +165,13 @@ The most consequential effect is on turn 0: `b_gradual` forces the first
 message to **not** contain identifying details (school name, address,
 landmarks, precise times) — those must emerge over later turns. See the
 hardcoded constraints in
-`packages/benchmark/src/prompts/scenarioToFirstUserMessagePrompt.ts:9`.
+`packages/benchmark/src/prompts/scenarioToFirstUserMessagePrompt.ts`.
 This is enforced by prompt instructions only; there is no validator that
 re-checks the generated first message.
 
 ## Stage 4 — Judging
 
-Entry point: `runJudges` (`packages/benchmark/src/kora.ts:74`).
+Entry point: `runJudges` (`packages/benchmark/src/kora.ts`).
 
 After the conversation, each judge model runs **two assessments in
 parallel** on the full transcript:
@@ -188,7 +188,7 @@ by `aggregateTestAssessments` / `aggregateMechanismAssessments`. Some
 mechanism criteria are gated by preconditions (e.g. M3/M5/M6/M7): when a
 judge reports `notTriggered: true`, the criterion is recorded as
 score-neutral and does not contribute to the model's grade tally — see
-`mapTestResultToRunResult` (`packages/benchmark/src/kora.ts:537`).
+`mapTestResultToRunResult` (`packages/benchmark/src/kora.ts`).
 
 ## Summary
 
