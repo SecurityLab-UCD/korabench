@@ -1,8 +1,11 @@
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from "node:fs";
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import * as path from "node:path";
 import {afterEach, beforeEach, describe, expect, it} from "vitest";
-import {resolveSoulBody} from "../resolveSoulBody.js";
+import {
+  resolveSoulBody,
+  resolveSoulBodyForPrompts,
+} from "../resolveSoulBody.js";
 
 describe("resolveSoulBody", () => {
   let tmpDir: string;
@@ -68,5 +71,73 @@ describe("resolveSoulBody", () => {
     expect(() => resolveSoulBody(dataPath)).toThrow(/empty/);
     expect(() => resolveSoulBody(dataPath)).toThrow(/seed\.md/);
     expect(() => resolveSoulBody(dataPath)).toThrow(/set SOUL_MD_PATH/);
+  });
+});
+
+describe("resolveSoulBodyForPrompts", () => {
+  let tmpDir: string;
+  let dataPath: string;
+  let seedPath: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), "kora-soul-prompts-test-"));
+    dataPath = path.join(tmpDir, "data");
+    mkdirSync(path.join(dataPath, "souls"), {recursive: true});
+    seedPath = path.join(dataPath, "souls", "seed.md");
+    delete process.env.SOUL_MD_PATH;
+  });
+
+  afterEach(() => {
+    delete process.env.SOUL_MD_PATH;
+    rmSync(tmpDir, {recursive: true, force: true});
+  });
+
+  it.each([
+    ["none"],
+    ["default"],
+    ["child"],
+    ["default", "child", "none"],
+  ] as const)("does not read SOUL_MD_PATH or the seed for %s", (...prompts) => {
+    // Inherited env path is invalid, and the seed is missing: reading either
+    // would throw.
+    process.env.SOUL_MD_PATH = path.join(tmpDir, "does-not-exist.md");
+
+    expect(resolveSoulBodyForPrompts(prompts, dataPath)).toBeUndefined();
+  });
+
+  it("does not read an existing empty seed for none", () => {
+    writeFileSync(seedPath, "");
+
+    expect(resolveSoulBodyForPrompts(["none"], dataPath)).toBeUndefined();
+  });
+
+  it("still resolves the soul body when soul is requested alongside none", () => {
+    writeFileSync(seedPath, "# Soul\nBody.");
+
+    expect(resolveSoulBodyForPrompts(["none", "soul"], dataPath)).toBe(
+      "# Soul\nBody."
+    );
+  });
+
+  it("keeps the missing-file error for soul", () => {
+    expect(() => resolveSoulBodyForPrompts(["soul"], dataPath)).toThrow(
+      /SOUL_MD_PATH/
+    );
+  });
+
+  it("keeps the empty-body error for soul", () => {
+    writeFileSync(seedPath, "  \n");
+
+    expect(() => resolveSoulBodyForPrompts(["soul"], dataPath)).toThrow(
+      /empty/
+    );
+  });
+
+  it("keeps the unreadable-env-path error for soul", () => {
+    process.env.SOUL_MD_PATH = path.join(tmpDir, "does-not-exist.md");
+
+    expect(() => resolveSoulBodyForPrompts(["none", "soul"], dataPath)).toThrow(
+      /does-not-exist\.md/
+    );
   });
 });

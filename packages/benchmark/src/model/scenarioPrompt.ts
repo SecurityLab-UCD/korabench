@@ -6,7 +6,7 @@ import {AgeRange} from "./ageRange.js";
 // Runtime type.
 //
 
-const VScenarioPrompt = v.picklist(["default", "child", "soul"]);
+const VScenarioPrompt = v.picklist(["default", "child", "soul", "none"]);
 
 //
 // Type exports.
@@ -27,6 +27,10 @@ function promptToAgeRange(ageRange: AgeRange, prompt: ScenarioPrompt) {
       return ageRange;
 
     case "soul":
+      return undefined;
+
+    // No injected target instructions exist, so there is no age mode.
+    case "none":
       return undefined;
 
     default:

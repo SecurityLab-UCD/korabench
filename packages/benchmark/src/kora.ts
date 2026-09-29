@@ -480,20 +480,20 @@ export const kora = Benchmark.new({
 
       const tAssistant = Date.now();
       const modelMessage = await (async () => {
-        const modelPrompt = conversationToNextMessagePrompt({
-          ageRange: promptAgeRange,
-          modelMemory: scenario.modelMemory,
-          prompt: key.prompt,
-          soulBody: c.soulBody,
-        });
+        // Prompt "none" sends the bare conversation: no system message, on
+        // every target turn (including continuation from startMessages).
+        const targetMessages: ModelMessage[] = [...messages];
+        if (key.prompt !== "none") {
+          const modelPrompt = conversationToNextMessagePrompt({
+            ageRange: promptAgeRange,
+            modelMemory: scenario.modelMemory,
+            prompt: key.prompt,
+            soulBody: c.soulBody,
+          });
+          targetMessages.unshift({role: "system", content: modelPrompt.input});
+        }
         const {output} = await c.getAssistantResponse({
-          messages: [
-            {
-              role: "system",
-              content: modelPrompt.input,
-            },
-            ...messages,
-          ],
+          messages: targetMessages,
         });
         return output;
       })();
