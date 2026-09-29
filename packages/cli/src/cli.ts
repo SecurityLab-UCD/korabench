@@ -18,6 +18,7 @@ import {reassessCommand} from "./commands/reassessCommand.js";
 import {runCommand} from "./commands/runCommand.js";
 import {resolveSoulBody} from "./commands/shared/resolveSoulBody.js";
 import {statsCommand} from "./commands/statsCommand.js";
+import {UsageLogError} from "./models/usageLog.js";
 
 function findConfigFile(filename: string): string {
   let dir = process.cwd();
@@ -513,4 +514,8 @@ program
     })
   );
 
-program.parseAsync();
+program.parseAsync().catch((error: unknown) => {
+  console.error(error);
+  // EX_CANTCREAT distinguishes fatal accounting failure from retryable runs.
+  process.exitCode = error instanceof UsageLogError ? 73 : 1;
+});

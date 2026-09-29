@@ -1,3 +1,5 @@
+import {UsageLogError} from "./models/usageLog.js";
+
 /**
  * Retry utilities for handling transient API failures with exponential backoff.
  */
@@ -29,6 +31,7 @@ const defaultOptions: Required<Omit<RetryOptions, "onRetry">> = {
  * Determines if an error is retryable based on its characteristics.
  */
 function isRetryableError(error: unknown): boolean {
+  if (error instanceof UsageLogError) return false;
   if (!(error instanceof Error)) {
     return false;
   }

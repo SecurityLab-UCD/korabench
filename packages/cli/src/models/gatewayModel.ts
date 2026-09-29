@@ -7,6 +7,7 @@ import {ModelOptions, buildRetryOptions, extractJson} from "./_shared.js";
 import {createFallbackModel} from "./fallbackModel.js";
 import {Model} from "./model.js";
 import {resolveModelConfig} from "./modelConfig.js";
+import {withUsageLogging} from "./usageLog.js";
 
 export type {ModelOptions};
 
@@ -42,7 +43,10 @@ export function createGatewayModel(
       const result = await withRetry(
         () =>
           generateText({
-            model: gateway(config.model),
+            model: withUsageLogging(gateway(config.model), {
+              modelId: config.model, label: modelSlug, callKind: "text",
+              provider: "gateway",
+            }),
             system: request.messages.find(m => m.role === "system")?.content,
             messages: request.messages
               .filter(m => m.role !== "system")
@@ -91,7 +95,10 @@ export function createGatewayModel(
 
         return withRetry(async () => {
           const result = await generateText({
-            model: gateway(config.model),
+            model: withUsageLogging(gateway(config.model), {
+              modelId: config.model, label: modelSlug, callKind: "structured",
+              provider: "gateway",
+            }),
             system: combinedSystem,
             messages: userMessages,
             maxOutputTokens: maxTokens,
@@ -107,7 +114,10 @@ export function createGatewayModel(
 
       return withRetry(async () => {
         const result = await generateObject({
-          model: gateway(config.model),
+          model: withUsageLogging(gateway(config.model), {
+            modelId: config.model, label: modelSlug, callKind: "structured",
+            provider: "gateway",
+          }),
           system: systemMessage,
           messages: userMessages,
           schema: jsonSchema(outputSchema),

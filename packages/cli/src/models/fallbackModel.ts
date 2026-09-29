@@ -1,5 +1,6 @@
 import {ModelRequest, TypedModelRequest} from "@korabench/core";
 import {Model} from "./model.js";
+import {UsageLogError} from "./usageLog.js";
 
 interface LabeledModel {
   label: string;
@@ -26,6 +27,7 @@ export function createFallbackModel(models: readonly LabeledModel[]): Model {
       try {
         return await invoke(current.model);
       } catch (error) {
+        if (error instanceof UsageLogError) throw error;
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
         const next = models[i + 1];

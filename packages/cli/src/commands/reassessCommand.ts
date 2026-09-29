@@ -17,6 +17,7 @@ import * as v from "valibot";
 import {Program} from "../cli.js";
 import {createModel} from "../models/createModel.js";
 import {Model} from "../models/model.js";
+import {UsageLogError} from "../models/usageLog.js";
 import {
   readReassessInputsFromJsonl,
   ReassessInput,
@@ -243,6 +244,7 @@ export async function reassessCommand(
           },
         ];
       } catch (error) {
+        if (error instanceof UsageLogError) throw error;
         console.error(
           `\nJudge run failed for id=${task.input.id} (model=${task.input.modelId}, key=${task.key}): ${error}`
         );
