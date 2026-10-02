@@ -168,7 +168,10 @@ export async function reassessCommand(
   }
 
   const judgeModels: Record<string, Model> = Object.fromEntries(
-    judgeModelSlugs.map(slug => [slug, createModel(modelsJsonPath, slug)])
+    judgeModelSlugs.map(slug => [
+      slug,
+      createModel(modelsJsonPath, slug, {role: "judge"}),
+    ])
   );
   const judgeContext = buildJudgeContext(judgeModels);
 

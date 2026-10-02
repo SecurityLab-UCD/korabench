@@ -44,7 +44,10 @@ export function createGatewayModel(
         () =>
           generateText({
             model: withUsageLogging(gateway(config.model), {
-              modelId: config.model, label: modelSlug, callKind: "text",
+              modelId: config.model,
+              label: modelSlug,
+              callKind: "text",
+              role: options?.role,
               provider: "gateway",
             }),
             system: request.messages.find(m => m.role === "system")?.content,
@@ -96,7 +99,10 @@ export function createGatewayModel(
         return withRetry(async () => {
           const result = await generateText({
             model: withUsageLogging(gateway(config.model), {
-              modelId: config.model, label: modelSlug, callKind: "structured",
+              modelId: config.model,
+              label: modelSlug,
+              callKind: "structured",
+              role: options?.role,
               provider: "gateway",
             }),
             system: combinedSystem,
@@ -115,7 +121,10 @@ export function createGatewayModel(
       return withRetry(async () => {
         const result = await generateObject({
           model: withUsageLogging(gateway(config.model), {
-            modelId: config.model, label: modelSlug, callKind: "structured",
+            modelId: config.model,
+            label: modelSlug,
+            callKind: "structured",
+            role: options?.role,
             provider: "gateway",
           }),
           system: systemMessage,

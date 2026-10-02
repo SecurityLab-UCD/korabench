@@ -204,9 +204,14 @@ export async function continueCommand(
   }
 
   const judgeModels: Record<string, Model> = Object.fromEntries(
-    judgeModelSlugs.map(slug => [slug, createModel(modelsJsonPath, slug)])
+    judgeModelSlugs.map(slug => [
+      slug,
+      createModel(modelsJsonPath, slug, {role: "judge"}),
+    ])
   );
-  const userModel = createModel(modelsJsonPath, userModelSlug);
+  const userModel = createModel(modelsJsonPath, userModelSlug, {
+    role: "simulated_user",
+  });
 
   // Per-record target model resolution: cache by modelId across records.
   const targetGatewayCache = new Map<string, Model | undefined>();

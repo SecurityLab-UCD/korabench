@@ -220,7 +220,10 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
         () =>
           generateText({
             model: withUsageLogging(languageModel, {
-              modelId: target.modelId, label: target.label, callKind: "text",
+              modelId: target.modelId,
+              label: target.label,
+              callKind: "text",
+              role: options?.role,
               provider: "openai-compatible",
             }),
             system: request.messages.find(m => m.role === "system")?.content,
@@ -266,7 +269,10 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
         return await withRetry(async () => {
           const result = await generateObject({
             model: withUsageLogging(languageModel, {
-              modelId: target.modelId, label: target.label, callKind: "structured",
+              modelId: target.modelId,
+              label: target.label,
+              callKind: "structured",
+              role: options?.role,
               provider: "openai-compatible",
             }),
             system: systemMessage,
@@ -292,7 +298,10 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
         return withRetry(async () => {
           const result = await generateText({
             model: withUsageLogging(languageModel, {
-              modelId: target.modelId, label: target.label, callKind: "structured-fallback",
+              modelId: target.modelId,
+              label: target.label,
+              callKind: "structured-fallback",
+              role: options?.role,
               provider: "openai-compatible",
             }),
             system: combinedSystem,

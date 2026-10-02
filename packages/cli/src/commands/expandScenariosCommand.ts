@@ -81,7 +81,9 @@ export async function expandScenariosCommand(
     label: slug,
     model: createModel(modelsJsonPath, slug),
   }));
-  const userModel = createModelChain(modelsJsonPath, userModelSlugs);
+  const userModel = createModelChain(modelsJsonPath, userModelSlugs, {
+    role: "simulated_user",
+  });
 
   const outputDir = path.dirname(outputFilePath);
   const tempDir = path.join(outputDir, ".kora-expand-tmp");

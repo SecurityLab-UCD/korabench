@@ -1,7 +1,10 @@
 import {createLogRetryHandler, RetryOptions} from "../retry.js";
 
+export type UsageRole = "target" | "simulated_user" | "judge";
+
 export interface ModelOptions {
   retry?: RetryOptions;
+  role?: UsageRole;
 }
 
 export const defaultRetryOptions: RetryOptions = {
