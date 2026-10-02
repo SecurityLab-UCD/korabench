@@ -75,6 +75,7 @@ describe("kora.runTest", () => {
   const defaultKey = keys.find(k => k.endsWith(":default"))!;
   const childKey = keys.find(k => k.endsWith(":child"))!;
   const soulKey = keys.find(k => k.endsWith(":soul"))!;
+  const noneKey = keys.find(k => k.endsWith(":none"))!;
 
   it("produces a 3-turn conversation with 6 messages", async () => {
     const context = createTestContext();
@@ -166,14 +167,156 @@ describe("kora.runTest", () => {
 
     await kora.runTest(context, scenario, soulKey);
 
-    const calls = (
-      context.getAssistantResponse as ReturnType<typeof vi.fn>
-    ).mock.calls;
+    const calls = (context.getAssistantResponse as ReturnType<typeof vi.fn>)
+      .mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     for (const [request] of calls) {
       const systemMessage = request.messages[0]!;
       expect(systemMessage.role).toBe("system");
       expect(systemMessage.content).toBe(soulBody);
+    }
+  });
+
+  describe("prompt 'none'", () => {
+    const modelMemory = "MEMORY_X — the child likes blue things.";
+    const soulBody = "SOUL_BODY_X — must not reach a none target.";
+    const memoryScenario = createScenario({modelMemory});
+
+    function targetRequests(context: TestContext): ModelRequest[] {
+      const mock = context.getAssistantResponse as ReturnType<typeof vi.fn>;
+      return mock.mock.calls.map(([request]) => request as ModelRequest);
+    }
+
+    function createNoneContext(): ReturnType<typeof createTestContext> {
+      const context = createTestContext();
+      context.soulBody = soulBody;
+      // Distinct, ordered replies so each assistant turn is identifiable.
+      let assistantTurn = 0;
+      (
+        context.getAssistantResponse as ReturnType<typeof vi.fn>
+      ).mockImplementation(async () => ({
+        output: `assistant-${assistantTurn++}`,
+      }));
+      let userTurn = 0;
+      (context.getUserResponse as ReturnType<typeof vi.fn>).mockImplementation(
+        async () => ({output: `user-${++userTurn}`})
+      );
+      return context;
+    }
+
+    it("sends only the conversational history on every target turn", async () => {
+      const context = createNoneContext();
+
+      const result = await kora.runTest(context, memoryScenario, noneKey);
+
+      expect(result.prompt).toBe("none");
+      expect(result.messages).toEqual([
+        {role: "user", content: memoryScenario.firstUserMessage},
+        {role: "assistant", content: "assistant-0"},
+        {role: "user", content: "user-1"},
+        {role: "assistant", content: "assistant-1"},
+        {role: "user", content: "user-2"},
+        {role: "assistant", content: "assistant-2"},
+      ]);
+      // Each target request equals the history up to and including the latest
+      // user message: nothing prepended, nothing appended.
+      const requests = targetRequests(context);
+      expect(requests.map(r => r.messages)).toEqual([
+        result.messages.slice(0, 1),
+        result.messages.slice(0, 3),
+        result.messages.slice(0, 5),
+      ]);
+    });
+
+    it("never sends a system or developer message, even with memory and a soul body supplied", async () => {
+      const context = createNoneContext();
+
+      await kora.runTest(context, memoryScenario, noneKey);
+
+      const requests = targetRequests(context);
+      expect(requests).toHaveLength(3);
+      for (const request of requests) {
+        for (const message of request.messages) {
+          expect(["user", "assistant"]).toContain(message.role);
+          expect(message.content).not.toBe(soulBody);
+          expect(message.content).not.toBe(modelMemory);
+        }
+      }
+    });
+
+    it("keeps omitting the system message when resuming from startMessages", async () => {
+      const context = createNoneContext();
+      const startMessages = [
+        {role: "user" as const, content: "resumed-user-0"},
+        {role: "assistant" as const, content: "resumed-assistant-0"},
+      ];
+
+      const result = await kora.runTest(
+        context,
+        memoryScenario,
+        noneKey,
+        startMessages
+      );
+
+      const requests = targetRequests(context);
+      expect(requests).toHaveLength(2);
+      expect(requests[0]!.messages).toEqual([
+        ...startMessages,
+        {role: "user", content: "user-1"},
+      ]);
+      expect(requests[1]!.messages).toEqual(result.messages.slice(0, 5));
+      for (const request of requests) {
+        expect(request.messages.every(m => m.role !== "system")).toBe(true);
+      }
+    });
+
+    it("leaves simulator and judge requests untouched by the omission", async () => {
+      const withNone = createNoneContext();
+      const withDefault = createNoneContext();
+
+      await kora.runTest(withNone, memoryScenario, noneKey);
+      await kora.runTest(withDefault, memoryScenario, defaultKey);
+
+      const requestsOf = (context: TestContext) =>
+        (context.getUserResponse as ReturnType<typeof vi.fn>).mock.calls;
+      expect(requestsOf(withNone)).toHaveLength(2);
+      expect(requestsOf(withNone)).toEqual(requestsOf(withDefault));
+      const judgeCalls = (context: ReturnType<typeof createTestContext>) =>
+        context.judgeModel.getResponse.mock.calls;
+      expect(judgeCalls(withNone)).toHaveLength(2);
+    });
+
+    it("differs from default, which does inject a system message with memory", async () => {
+      const context = createNoneContext();
+
+      await kora.runTest(context, memoryScenario, defaultKey);
+
+      const first = targetRequests(context)[0]!;
+      expect(first.messages[0]!.role).toBe("system");
+      expect(String(first.messages[0]!.content)).toContain(modelMemory);
+    });
+  });
+
+  it("passes soulBody verbatim on every turn of a resumed 'soul' conversation", async () => {
+    const context = createTestContext();
+    const soulBody = "SOUL_BODY_Y — resumed verbatim system prompt.";
+    context.soulBody = soulBody;
+
+    await kora.runTest(context, scenario, soulKey, [
+      {role: "user", content: "resumed-user-0"},
+      {role: "assistant", content: "resumed-assistant-0"},
+    ]);
+
+    const calls = (context.getAssistantResponse as ReturnType<typeof vi.fn>)
+      .mock.calls;
+    expect(calls).toHaveLength(2);
+    for (const [request] of calls) {
+      expect(request.messages[0]).toEqual({role: "system", content: soulBody});
+      expect(
+        request.messages
+          .slice(1)
+          .every((m: {role: string}) => m.role !== "system")
+      ).toBe(true);
     }
   });
 

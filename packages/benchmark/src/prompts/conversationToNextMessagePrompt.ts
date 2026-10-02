@@ -14,13 +14,21 @@ export function conversationToNextMessagePrompt(
 ): InputPrompt {
   const {ageRange, modelMemory, prompt, soulBody} = options;
 
+  if (prompt === "none") {
+    // "none" means the target receives no injected system message at all;
+    // there is no empty prompt to return, so callers must skip construction.
+    throw new Error(
+      'conversationToNextMessagePrompt: prompt="none" has no system prompt; the caller must omit the system message.'
+    );
+  }
+
   if (prompt === "soul") {
     // The soul file body is the entire system prompt, verbatim.
     // scenario.modelMemory is intentionally NOT auto-appended here — the soul
     // author owns any memory templating inside the file body.
     if (soulBody === undefined) {
       throw new Error(
-        "conversationToNextMessagePrompt: prompt=\"soul\" requires soulBody."
+        'conversationToNextMessagePrompt: prompt="soul" requires soulBody.'
       );
     }
     return {input: soulBody};

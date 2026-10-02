@@ -2,6 +2,19 @@ import {describe, expect, it} from "vitest";
 import {conversationToNextMessagePrompt} from "../conversationToNextMessagePrompt.js";
 
 describe("conversationToNextMessagePrompt", () => {
+  describe("none prompt", () => {
+    it("throws instead of producing an empty or generic system prompt", () => {
+      expect(() =>
+        conversationToNextMessagePrompt({
+          ageRange: undefined,
+          modelMemory: "User likes blue.",
+          prompt: "none",
+          soulBody: "ignored",
+        })
+      ).toThrow(/none/);
+    });
+  });
+
   describe("default prompt (no ageRange)", () => {
     it("returns the generic assistant prompt", () => {
       const {input} = conversationToNextMessagePrompt({

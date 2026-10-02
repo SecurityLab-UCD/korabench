@@ -152,5 +152,47 @@
   "glm-5:limited": {
     "model": "zai/glm-5",
     "maxTokens": 16000
+  },
+  "openai-direct-gpt-5.6-luna": {
+    "provider": "openai-compatible",
+    "model": "gpt-5.6-luna",
+    "baseURLEnv": "OPENAI_BASE_URL",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "supportsStructuredOutputs": true
+  },
+  "openai-direct-gpt-5.4-mini": {
+    "provider": "openai-compatible",
+    "model": "gpt-5.4-mini",
+    "baseURLEnv": "OPENAI_BASE_URL",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "supportsStructuredOutputs": true
+  },
+  "openai-direct-gpt-5.4-nano": {
+    "provider": "openai-compatible",
+    "model": "gpt-5.4-nano",
+    "baseURLEnv": "OPENAI_BASE_URL",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "supportsStructuredOutputs": true
+  },
+  "openai-direct-gpt-4o-mini": {
+    "provider": "openai-compatible",
+    "model": "gpt-4o-mini",
+    "baseURLEnv": "OPENAI_BASE_URL",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "supportsStructuredOutputs": true
+  },
+  "openai-direct-gpt-4o": {
+    "provider": "openai-compatible",
+    "model": "gpt-4o",
+    "baseURLEnv": "OPENAI_BASE_URL",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "supportsStructuredOutputs": true
+  },
+  "openai-direct-gpt-5.2-medium-limited": {
+    "provider": "openai-compatible",
+    "model": "gpt-5.2",
+    "baseURLEnv": "OPENAI_BASE_URL",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "supportsStructuredOutputs": true
   }
 }

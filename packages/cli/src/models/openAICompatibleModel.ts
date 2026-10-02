@@ -1,7 +1,8 @@
 import {createOpenAICompatible} from "@ai-sdk/openai-compatible";
+import type {LanguageModelV3} from "@ai-sdk/provider";
 import {ModelRequest, TypedModelRequest} from "@korabench/core";
 import {toJsonSchema} from "@valibot/to-json-schema";
-import {generateObject, generateText, jsonSchema, LanguageModel} from "ai";
+import {generateObject, generateText, jsonSchema} from "ai";
 import {Agent, fetch as undiciFetch} from "undici";
 import * as v from "valibot";
 import {withRetry} from "../retry.js";
@@ -13,6 +14,7 @@ import {
   ParsedProviderSlug,
   resolveProviderConnection,
 } from "./openAICompatibleProviders.js";
+import {UsageLogError, withUsageLogging} from "./usageLog.js";
 
 // Self-hosted models (vLLM, sglang, ...) running large/thinking models can take
 // minutes per non-streaming completion, which trips undici's default header
@@ -100,7 +102,7 @@ function readEnv(envName: string, slug: string, field: string): string {
 function buildLanguageModel(
   target: ResolvedTarget,
   modelId: string
-): LanguageModel {
+): LanguageModelV3 {
   const provider = createOpenAICompatible({
     name: target.label,
     baseURL: target.baseURL,
@@ -192,9 +194,9 @@ function resolveModelIdCached(target: ResolvedTarget): Promise<string> {
 
 function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
   const retryOptions = buildRetryOptions(target.label, options);
-  let languageModelPromise: Promise<LanguageModel> | undefined;
+  let languageModelPromise: Promise<LanguageModelV3> | undefined;
 
-  function getLanguageModel(): Promise<LanguageModel> {
+  function getLanguageModel(): Promise<LanguageModelV3> {
     if (!languageModelPromise) {
       languageModelPromise = (async () => {
         const resolvedId = await resolveModelIdCached(target);
@@ -217,7 +219,10 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
       const result = await withRetry(
         () =>
           generateText({
-            model: languageModel,
+            model: withUsageLogging(languageModel, {
+              modelId: target.modelId, label: target.label, callKind: "text",
+              provider: "openai-compatible",
+            }),
             system: request.messages.find(m => m.role === "system")?.content,
             messages: request.messages
               .filter(m => m.role !== "system")
@@ -260,7 +265,10 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
       try {
         return await withRetry(async () => {
           const result = await generateObject({
-            model: languageModel,
+            model: withUsageLogging(languageModel, {
+              modelId: target.modelId, label: target.label, callKind: "structured",
+              provider: "openai-compatible",
+            }),
             system: systemMessage,
             messages: userMessages,
             schema: jsonSchema(outputSchema),
@@ -272,6 +280,7 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
           return v.parse(request.outputType, result.object);
         }, retryOptions);
       } catch (primaryError) {
+        if (primaryError instanceof UsageLogError) throw primaryError;
         const schemaInstruction =
           "Respond with a single JSON object that strictly conforms to this JSON Schema. " +
           "Output JSON only — no prose, no code fences, no <think> tags.\n\n" +
@@ -282,7 +291,10 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
 
         return withRetry(async () => {
           const result = await generateText({
-            model: languageModel,
+            model: withUsageLogging(languageModel, {
+              modelId: target.modelId, label: target.label, callKind: "structured-fallback",
+              provider: "openai-compatible",
+            }),
             system: combinedSystem,
             messages: userMessages,
             maxOutputTokens: maxTokens,

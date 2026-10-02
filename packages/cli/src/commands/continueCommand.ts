@@ -15,6 +15,7 @@ import * as v from "valibot";
 import {Program} from "../cli.js";
 import {createModel} from "../models/createModel.js";
 import {Model} from "../models/model.js";
+import {UsageLogError} from "../models/usageLog.js";
 import {
   buildContext,
   BuiltContext,
@@ -307,6 +308,7 @@ export async function continueCommand(
           },
         ];
       } catch (error) {
+        if (error instanceof UsageLogError) throw error;
         console.error(
           `\nContinue run failed for id=${task.input.id} (model=${task.input.modelId}, key=${task.key}): ${error}`
         );

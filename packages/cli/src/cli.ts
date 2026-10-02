@@ -16,8 +16,9 @@ import {expandScenariosCommand} from "./commands/expandScenariosCommand.js";
 import {generateSeeds} from "./commands/generateSeedsCommand.js";
 import {reassessCommand} from "./commands/reassessCommand.js";
 import {runCommand} from "./commands/runCommand.js";
-import {resolveSoulBody} from "./commands/shared/resolveSoulBody.js";
+import {resolveSoulBodyForPrompts} from "./commands/shared/resolveSoulBody.js";
 import {statsCommand} from "./commands/statsCommand.js";
+import {UsageLogError} from "./models/usageLog.js";
 
 function findConfigFile(filename: string): string {
   let dir = process.cwd();
@@ -251,7 +252,7 @@ program
   .option("-o, --output <path>", "output results JSON file", defaultResultsPath)
   .option(
     "--prompts <prompts>",
-    "comma-separated prompts to test (default, child, soul); soul reads the system prompt body from SOUL_MD_PATH or data/souls/seed.md",
+    "comma-separated prompts to test (default, child, soul, none); soul reads the system prompt body from SOUL_MD_PATH or data/souls/seed.md; none sends the target no system message and never reads SOUL_MD_PATH",
     ScenarioPrompt.list[0]
   )
   .option(
@@ -300,9 +301,7 @@ program
     const prompts = opts.prompts
       .split(",")
       .map(p => v.parse(ScenarioPrompt.io, p.trim()));
-    const soulBody = prompts.includes("soul")
-      ? resolveSoulBody(dataPath)
-      : undefined;
+    const soulBody = resolveSoulBodyForPrompts(prompts, dataPath);
 
     return runCommand(
       program,
@@ -513,4 +512,8 @@ program
     })
   );
 
-program.parseAsync();
+program.parseAsync().catch((error: unknown) => {
+  console.error(error);
+  // EX_CANTCREAT distinguishes fatal accounting failure from retryable runs.
+  process.exitCode = error instanceof UsageLogError ? 73 : 1;
+});

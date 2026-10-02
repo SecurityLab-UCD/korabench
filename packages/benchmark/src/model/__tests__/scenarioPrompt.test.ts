@@ -1,10 +1,25 @@
+import * as v from "valibot";
 import {describe, expect, it} from "vitest";
 import {ScenarioPrompt} from "../scenarioPrompt.js";
 
 describe("ScenarioPrompt", () => {
   describe("list", () => {
-    it("includes default, child, and soul", () => {
-      expect(ScenarioPrompt.list).toEqual(["default", "child", "soul"]);
+    it("includes default, child, soul, and none", () => {
+      expect(ScenarioPrompt.list).toEqual(["default", "child", "soul", "none"]);
+    });
+
+    it("keeps default as the first (CLI default) variant", () => {
+      expect(ScenarioPrompt.list[0]).toBe("default");
+    });
+  });
+
+  describe("io", () => {
+    it.each(["default", "child", "soul", "none"])("parses %s", prompt => {
+      expect(v.parse(ScenarioPrompt.io, prompt)).toBe(prompt);
+    });
+
+    it.each(["", "None", "empty", "no-policy"])("rejects %j", prompt => {
+      expect(() => v.parse(ScenarioPrompt.io, prompt)).toThrow();
     });
   });
 
@@ -24,6 +39,12 @@ describe("ScenarioPrompt", () => {
       expect(ScenarioPrompt.toAgeRange("7to9", "soul")).toBeUndefined();
       expect(ScenarioPrompt.toAgeRange("10to12", "soul")).toBeUndefined();
       expect(ScenarioPrompt.toAgeRange("13to17", "soul")).toBeUndefined();
+    });
+
+    it("returns undefined for none (no age-mode instructions exist)", () => {
+      expect(ScenarioPrompt.toAgeRange("7to9", "none")).toBeUndefined();
+      expect(ScenarioPrompt.toAgeRange("10to12", "none")).toBeUndefined();
+      expect(ScenarioPrompt.toAgeRange("13to17", "none")).toBeUndefined();
     });
   });
 });

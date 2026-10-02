@@ -10,6 +10,7 @@ import * as v from "valibot";
 import {Program} from "../cli.js";
 import {createModel} from "../models/createModel.js";
 import {Model} from "../models/model.js";
+import {UsageLogError} from "../models/usageLog.js";
 import {
   buildContext,
   resolveTargetGatewayModel,
@@ -295,6 +296,7 @@ export async function runCommand(
           progress.increment(true);
           return [{kind: "success", testResult}];
         } catch (error) {
+          if (error instanceof UsageLogError) throw error;
           console.error(`\nTest failed for key ${task.key}: ${error}`);
           progress.increment(false);
           return [{kind: "failure"}];

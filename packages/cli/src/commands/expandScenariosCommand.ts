@@ -13,6 +13,7 @@ import {consume, flatTransform} from "streaming-iterables";
 import * as v from "valibot";
 import {Program} from "../cli.js";
 import {createModel, createModelChain} from "../models/createModel.js";
+import {UsageLogError} from "../models/usageLog.js";
 
 async function* readSeedsFromJsonl(
   filePath: string,
@@ -131,6 +132,7 @@ export async function expandScenariosCommand(
             progress.increment(true);
             return [];
           } catch (error) {
+            if (error instanceof UsageLogError) throw error;
             lastError = error;
             const next = expansionModels[i + 1];
             const reason =

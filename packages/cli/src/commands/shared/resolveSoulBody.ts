@@ -1,3 +1,4 @@
+import {ScenarioPrompt} from "@korabench/benchmark";
 import {readFileSync} from "node:fs";
 import * as path from "node:path";
 
@@ -22,9 +23,7 @@ export function resolveSoulBody(dataPath: string): string {
         return {body: readFileSync(envPath, "utf-8"), resolvedPath: envPath};
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        throw new Error(
-          `Failed to read SOUL_MD_PATH=${envPath}: ${reason}`
-        );
+        throw new Error(`Failed to read SOUL_MD_PATH=${envPath}: ${reason}`);
       }
     }
 
@@ -47,4 +46,16 @@ export function resolveSoulBody(dataPath: string): string {
   }
 
   return body;
+}
+
+/**
+ * Resolve the soul body only when the requested prompt variants include
+ * `soul`. Other variants, notably `none`, never read SOUL_MD_PATH or the
+ * fallback seed, so an inherited invalid SOUL_MD_PATH cannot break them.
+ */
+export function resolveSoulBodyForPrompts(
+  prompts: readonly ScenarioPrompt[],
+  dataPath: string
+): string | undefined {
+  return prompts.includes("soul") ? resolveSoulBody(dataPath) : undefined;
 }
