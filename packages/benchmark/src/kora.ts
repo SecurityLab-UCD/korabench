@@ -67,6 +67,12 @@ function clampAgeToBand(age: number, band: AgeRange): number {
   return rounded;
 }
 
+export interface RunJudgesOptions {
+  /** Skip the mechanism judge call. The safety call and its prompt are
+   * unchanged; the result carries no `mechanismAssessment`. */
+  skipMechanisms?: boolean;
+}
+
 /**
  * Run the judge-assessment step on a pre-existing transcript.
  *
@@ -79,20 +85,21 @@ export async function runJudges(
   scenario: Scenario,
   prompt: ScenarioPrompt,
   messages: readonly ModelMessage[],
-  trace?: (event: TraceEvent) => void
+  trace?: (event: TraceEvent) => void,
+  options: RunJudgesOptions = {}
 ): Promise<TestResult> {
   const riskCategory = RiskCategory.find(scenario.seed.riskCategoryId);
   const risk = RiskCategory.findRisk(riskCategory, scenario.seed.riskId);
+  const skipMechanisms = options.skipMechanisms === true;
 
   const assessmentPrompt = conversationToAssessmentPrompt(
     risk,
     scenario,
     messages
   );
-  const mechanismPrompt = conversationToMechanismAssessmentPrompt(
-    scenario,
-    messages
-  );
+  const mechanismPrompt = skipMechanisms
+    ? undefined
+    : conversationToMechanismAssessmentPrompt(scenario, messages);
 
   const judgeSlugs = Object.keys(judgeModels);
   const tJudges = Date.now();
@@ -109,20 +116,24 @@ export async function runJudges(
           ],
           outputType: TestAssessment.io,
         }),
-        judge.getResponse({
-          messages: [
-            {role: "system", content: mechanismPrompt.system},
-            {role: "user", content: mechanismPrompt.user},
-          ],
-          outputType: MechanismAssessment.io,
-        }),
+        mechanismPrompt
+          ? judge.getResponse({
+              messages: [
+                {role: "system", content: mechanismPrompt.system},
+                {role: "user", content: mechanismPrompt.user},
+              ],
+              outputType: MechanismAssessment.io,
+            })
+          : undefined,
       ]);
       trace?.({phase: "judge", slug, durationMs: Date.now() - tJudge});
 
       return {
         judgeModelSlug: slug,
         assessment: safetyResult.output,
-        mechanismAssessment: mechanismResult.output,
+        ...(mechanismResult
+          ? {mechanismAssessment: mechanismResult.output}
+          : {}),
       };
     })
   );
@@ -135,8 +146,26 @@ export async function runJudges(
   const assessment = aggregateTestAssessments(
     judgeAssessments.map(j => j.assessment)
   );
+
+  if (skipMechanisms) {
+    return {
+      scenario,
+      prompt,
+      messages: [...messages],
+      assessment,
+      judgeAssessments,
+    };
+  }
+
   const mechanismAssessment = aggregateMechanismAssessments(
-    judgeAssessments.map(j => j.mechanismAssessment)
+    judgeAssessments.map(j => {
+      if (!j.mechanismAssessment) {
+        throw new Error(
+          `Judge ${j.judgeModelSlug} returned no mechanism assessment.`
+        );
+      }
+      return j.mechanismAssessment;
+    })
   );
 
   return {
@@ -509,7 +538,9 @@ export const kora = Benchmark.new({
       });
     }
 
-    return runJudges(c.judgeModels, scenario, prompt, messages, c.trace);
+    return runJudges(c.judgeModels, scenario, prompt, messages, c.trace, {
+      skipMechanisms: c.skipMechanisms,
+    });
   },
   mapTestResultToRunResult(result) {
     const {assessment, mechanismAssessment} = result;
@@ -541,19 +572,23 @@ export const kora = Benchmark.new({
       return [f, a, e, occurrenceCount, 0];
     }
 
-    const mechanisms: Record<string, RunMechanismSums> = Object.fromEntries(
-      Mechanism.listAll().map(m => {
-        const criterion = mechanismAssessment[m.id]!;
-        return [
-          m.id,
-          mechanismSums(
-            criterion.grade,
-            criterion.occurrenceCount,
-            criterion.notTriggered
-          ),
-        ];
-      })
-    );
+    // A run that skipped the mechanism judge call sums no mechanisms; the
+    // reducers treat a missing mechanism key as zero.
+    const mechanisms: Record<string, RunMechanismSums> = mechanismAssessment
+      ? Object.fromEntries(
+          Mechanism.listAll().map(m => {
+            const criterion = mechanismAssessment[m.id]!;
+            return [
+              m.id,
+              mechanismSums(
+                criterion.grade,
+                criterion.occurrenceCount,
+                criterion.notTriggered
+              ),
+            ];
+          })
+        )
+      : {};
 
     return {
       scores: [

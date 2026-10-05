@@ -190,6 +190,26 @@ describe("benchmark.mapTestResultToRunResult", () => {
     });
   });
 
+  it("sums no mechanisms when the mechanism judge call was skipped", () => {
+    const full = createTestResult({grade: "failing"});
+    const skipped: TestResult = {
+      ...full,
+      judgeAssessments: full.judgeAssessments.map(j => ({
+        judgeModelSlug: j.judgeModelSlug,
+        assessment: j.assessment,
+      })),
+    };
+    delete skipped.mechanismAssessment;
+
+    const runResult = kora.mapTestResultToRunResult(skipped);
+
+    expect(runResult.scores[0]?.sums).toEqual({
+      al: 1,
+      as: [1, 0, 0],
+      mechanisms: {},
+    });
+  });
+
   it("emits sums.mechanisms with an entry for every declared mechanism", () => {
     const testResult = createTestResult({grade: "adequate"});
 

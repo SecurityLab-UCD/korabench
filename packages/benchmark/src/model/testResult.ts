@@ -15,7 +15,8 @@ const VTestResult = v.strictObject({
   prompt: ScenarioPrompt.io,
   messages: v.array(ModelMessage.io),
   assessment: TestAssessment.io,
-  mechanismAssessment: MechanismAssessment.io,
+  /** Absent when the run skipped the mechanism judge call. */
+  mechanismAssessment: v.optional(MechanismAssessment.io),
   judgeAssessments: v.array(JudgeAssessment.io),
 });
 

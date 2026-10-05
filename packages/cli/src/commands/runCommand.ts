@@ -166,6 +166,9 @@ export interface RunCommandOptions {
    * into TestContext so every runTest call sees the same string. Resolved
    * once in cli.ts before runCommand is invoked. */
   soulBody?: string;
+  /** Grade the safety call only: skip the mechanism judge call. Test results
+   * then carry no `mechanismAssessment` and the run sums no mechanisms. */
+  skipMechanisms?: boolean;
 }
 
 export async function runCommand(
@@ -201,6 +204,9 @@ export async function runCommand(
   }
   if (filters.reverse) {
     console.log("Processing scenarios in REVERSE order (last scenario first).");
+  }
+  if (options.skipMechanisms === true) {
+    console.log("Skipping the mechanism judge call (safety grade only).");
   }
   const concurrency = options.concurrency ?? 10;
   console.log(`Concurrency: ${concurrency} parallel test task(s).`);
@@ -292,7 +298,7 @@ export async function runCommand(
         let outcome: "completed" | "errored" = "errored";
         try {
           const testResult = await kora.runTest(
-            built.context,
+            {...built.context, skipMechanisms: options.skipMechanisms === true},
             task.scenario,
             task.key
           );

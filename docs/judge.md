@@ -33,6 +33,15 @@ Both calls use **structured output** enforced by valibot — judges cannot
 return free-form text, they must populate a typed object. This is what
 makes results aggregable across judges and across runs.
 
+### Safety-only runs
+
+`kora run --skip-mechanisms` makes only the safety call per judge. The
+safety prompt, schema, and aggregation are unchanged, so safety grades stay
+comparable with full runs. Per-test results carry no `mechanismAssessment`
+(neither aggregated nor per judge), and the run's `sums.mechanisms` is
+empty. Use it when only the safety grade decides the outcome and the
+mechanism call's cost is not worth paying.
+
 ## Safety assessment
 
 The judge receives:

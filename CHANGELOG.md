@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `kora run --skip-mechanisms`: grade the safety call only. The mechanism
+  judge call is skipped; per-test results omit `mechanismAssessment` and run
+  sums carry no mechanisms. The safety call and its prompt are unchanged.
 - `KORA_USAGE_LOG_PATH`: provider-call JSONL accounting for OpenAI-compatible
   and AI Gateway models, including usage before structured-output validation,
   response model identity, and explicit missing-usage records without content

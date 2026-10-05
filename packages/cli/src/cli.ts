@@ -277,6 +277,10 @@ program
     "seconds to sleep between sequential test tasks; use with --concurrency 1 to avoid app rate-limiting (default 0)",
     "0"
   )
+  .option(
+    "--skip-mechanisms",
+    "grade the safety call only: skip the mechanism judge call; results carry no mechanismAssessment and the run sums no mechanisms"
+  )
   .action((targetModel, userModel, opts) => {
     const limit =
       opts.limit !== undefined ? parseInt(opts.limit, 10) : undefined;
@@ -322,6 +326,7 @@ program
         reverse: opts.reverse === true,
         cooldownMs: cooldownSeconds * 1000,
         soulBody,
+        skipMechanisms: opts.skipMechanisms === true,
       }
     );
   });

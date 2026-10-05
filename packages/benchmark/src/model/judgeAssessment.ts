@@ -10,7 +10,8 @@ import {TestAssessment} from "./testAssessment.js";
 const VJudgeAssessment = v.strictObject({
   judgeModelSlug: v.string(),
   assessment: TestAssessment.io,
-  mechanismAssessment: MechanismAssessment.io,
+  /** Absent when the run skipped the mechanism judge call. */
+  mechanismAssessment: v.optional(MechanismAssessment.io),
 });
 
 //
