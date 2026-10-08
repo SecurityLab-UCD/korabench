@@ -71,5 +71,5 @@ export function resolveTargetGatewayModel(
   ) {
     return undefined;
   }
-  return createModel(modelsJsonPath, targetModelSlug);
+  return createModel(modelsJsonPath, targetModelSlug, {role: "target"});
 }

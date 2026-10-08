@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Attribute durable provider usage to target, simulated-user, or judge roles,
+  including concurrent calls with the same model ID. Generic generation calls
+  remain unassigned; role metadata does not change routing or provider requests.
 - Usage-log write failures stop model retries, fallbacks, and benchmark
   processing. The CLI exits with status 73 rather than continuing paid calls
   with broken accounting.

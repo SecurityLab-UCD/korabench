@@ -6,10 +6,12 @@ import type {
 import {wrapLanguageModel} from "ai";
 import {appendFileSync} from "node:fs";
 import * as v from "valibot";
+import type {UsageRole} from "./_shared.js";
 
 interface UsageContext {
   modelId: string;
   label: string;
+  role?: UsageRole;
   callKind: "text" | "structured" | "structured-fallback";
   provider: "openai-compatible" | "gateway";
 }
@@ -33,6 +35,7 @@ interface UsageRecord {
   modelId: string;
   model: string | null;
   label: string;
+  role?: UsageRole;
   callKind: UsageContext["callKind"];
   outcome: "response" | "error";
   usageStatus: "complete" | "partial" | "missing";
@@ -152,6 +155,12 @@ export function withUsageLogging(
   const logPath = process.env.KORA_USAGE_LOG_PATH;
   if (!logPath) return model;
 
+  const identity = {
+    modelId: context.modelId,
+    label: context.label,
+    role: context.role,
+    callKind: context.callKind,
+  };
   return wrapLanguageModel({
     model,
     middleware: {
@@ -159,11 +168,7 @@ export function withUsageLogging(
       async wrapGenerate({doGenerate}) {
         const failure = failedUsageLogs.get(logPath);
         if (failure) throw failure;
-        const identity = {
-          modelId: context.modelId,
-          label: context.label,
-          callKind: context.callKind,
-        };
+
         let result: LanguageModelV3GenerateResult;
         try {
           result = await doGenerate();

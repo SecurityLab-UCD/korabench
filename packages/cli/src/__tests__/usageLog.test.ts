@@ -10,6 +10,8 @@ import * as v from "valibot";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {runCommand} from "../commands/runCommand.js";
 import * as contextBuilder from "../commands/shared/buildContext.js";
+import type {UsageRole} from "../models/_shared.js";
+import {createModel, createModelChain} from "../models/createModel.js";
 import {createFallbackModel} from "../models/fallbackModel.js";
 import {createGatewayModel} from "../models/gatewayModel.js";
 import type {Model} from "../models/model.js";
@@ -48,6 +50,7 @@ const recordSchema = v.object({
   modelId: v.string(),
   model: v.nullable(v.string()),
   label: v.string(),
+  role: v.optional(v.picklist(["target", "simulated_user", "judge"])),
   callKind: v.string(),
   outcome: v.string(),
   usageStatus: v.string(),
@@ -97,7 +100,11 @@ describe("provider usage logging", () => {
       .map(line => v.parse(recordSchema, JSON.parse(line)));
   }
 
-  function compatible(label = "target-route", maxRetries = 0): Model {
+  function compatible(
+    label = "target-route",
+    maxRetries = 0,
+    role?: UsageRole
+  ): Model {
     return createOpenAICompatibleModelFromConfig(
       label,
       {
@@ -107,14 +114,19 @@ describe("provider usage logging", () => {
         apiKey: "private-api-key",
         supportsStructuredOutputs: true,
       },
-      {retry: {maxRetries, initialDelayMs: 1, jitterFactor: 0}}
+      {role, retry: {maxRetries, initialDelayMs: 1, jitterFactor: 0}}
     );
   }
 
-  function gateway(model = "openai/requested-model", maxRetries = 0): Model {
+  function gateway(
+    model = "openai/requested-model",
+    maxRetries = 0,
+    role?: UsageRole
+  ): Model {
     const registry = path.join(directory, "models.json");
     fs.writeFileSync(registry, JSON.stringify({"judge-route": {model}}));
     return createGatewayModel(registry, "judge-route", {
+      role,
       retry: {maxRetries, initialDelayMs: 1, jitterFactor: 0},
     });
   }
@@ -224,7 +236,7 @@ describe("provider usage logging", () => {
       {text: '{"answer":"ok"}', usage: rawUsage},
     ];
     await expect(
-      compatible().getStructuredResponse({
+      compatible("judge-route", 0, "judge").getStructuredResponse({
         ...request,
         outputType: v.object({answer: v.string()}),
       })
@@ -232,10 +244,10 @@ describe("provider usage logging", () => {
     expect(calls).toBe(2);
     expect(loggedBeforeCall).toEqual([0, 1]);
     expect(
-      records().map(row => [row.callKind, row.usage?.totalTokens])
+      records().map(row => [row.role, row.callKind, row.usage?.totalTokens])
     ).toEqual([
-      ["structured", 120],
-      ["structured-fallback", 120],
+      ["judge", "structured", 120],
+      ["judge", "structured-fallback", 120],
     ]);
   });
 
@@ -245,59 +257,98 @@ describe("provider usage logging", () => {
       {text: '{"answer":"ok"}', usage: rawUsage},
     ];
     await expect(
-      compatible("judge-route", 1).getStructuredResponse({
+      compatible("judge-route", 1, "judge").getStructuredResponse({
         ...request,
         outputType: v.object({answer: v.string()}),
       })
     ).resolves.toEqual({answer: "ok"});
     expect(calls).toBe(2);
-    expect(records().map(row => row.callKind)).toEqual([
-      "structured",
-      "structured",
+    expect(records().map(row => [row.role, row.callKind])).toEqual([
+      ["judge", "structured"],
+      ["judge", "structured"],
     ]);
     expect(
       records().reduce((total, row) => total + row.usage!.inputTokens!, 0)
     ).toBe(200);
   });
 
-  it("keeps concurrent target, user and judge records intact and private", async () => {
-    const labels = ["target-route", "user-route", "judge-route"];
-    await Promise.all(
-      labels.flatMap(label =>
-        Array.from({length: 8}, () =>
-          compatible(label).getTextResponse(request)
-        )
-      )
-    );
-    const rows = records();
-    expect(rows).toHaveLength(24);
-    for (const label of labels)
-      expect(rows.filter(row => row.label === label)).toHaveLength(8);
-    for (const row of rows) {
-      expect(row).toMatchObject({
-        modelId: "requested-model",
-        model: "resolved-compatible-model",
-        callKind: "text",
-        outcome: "response",
-        usageStatus: "complete",
-        usage: {
-          inputTokens: 100,
-          outputTokens: 20,
-          totalTokens: 120,
-          inputTokenDetails: {cacheReadTokens: 30},
-          outputTokenDetails: {reasoningTokens: 5},
-        },
+  it.each(["openai-compatible", "gateway"] as const)(
+    "distinguishes concurrent roles sharing the same %s model and route",
+    async provider => {
+      const registry = path.join(directory, "models.json");
+      const modelId =
+        provider === "gateway" ? "openai/requested-model" : "requested-model";
+      fs.writeFileSync(
+        registry,
+        JSON.stringify({
+          "shared-route":
+            provider === "gateway"
+              ? {model: modelId}
+              : {
+                  provider,
+                  model: modelId,
+                  baseURL,
+                  apiKey: "private-api-key",
+                  supportsStructuredOutputs: true,
+                },
+        })
+      );
+      if (provider === "gateway") {
+        replies = [{text: "private-completion", usage: gatewayUsage}];
+      }
+      const target = contextBuilder.resolveTargetGatewayModel(
+        registry,
+        "shared-route"
+      );
+      if (!target) throw new Error("Missing target provider model");
+      const user = createModelChain(registry, ["shared-route"], {
+        role: "simulated_user",
       });
+      const judge = createModel(registry, "shared-route", {role: "judge"});
+      await Promise.all(
+        [target, user, judge].map(model => model.getTextResponse(request))
+      );
+      const rows = records();
+      expect(rows.map(row => row.role).sort()).toEqual([
+        "judge",
+        "simulated_user",
+        "target",
+      ]);
+      for (const row of rows) {
+        expect(row).toEqual({
+          role: row.role,
+          modelId,
+          model:
+            provider === "gateway"
+              ? "resolved-gateway-model"
+              : "resolved-compatible-model",
+          label: "shared-route",
+          callKind: "text",
+          outcome: "response",
+          usageStatus: "complete",
+          usage: {
+            inputTokens: 100,
+            outputTokens: 20,
+            totalTokens: 120,
+            inputTokenDetails: {
+              noCacheTokens: 70,
+              cacheReadTokens: 30,
+              cacheWriteTokens: provider === "gateway" ? 4 : null,
+            },
+            outputTokenDetails: {textTokens: 15, reasoningTokens: 5},
+          },
+        });
+      }
+      const serialized = fs.readFileSync(logPath, "utf8");
+      for (const secret of [
+        "private-prompt",
+        "private-completion",
+        "private-api-key",
+        "private-header-value",
+      ])
+        expect(serialized).not.toContain(secret);
     }
-    const serialized = fs.readFileSync(logPath, "utf8");
-    for (const secret of [
-      "private-prompt",
-      "private-completion",
-      "private-api-key",
-      "private-header-value",
-    ])
-      expect(serialized).not.toContain(secret);
-  });
+  );
 
   it("makes missing usage explicit instead of emitting zero-token calls", async () => {
     replies = [{text: "ok"}];
@@ -307,6 +358,7 @@ describe("provider usage logging", () => {
       usage: {inputTokens: null, outputTokens: null},
     });
     expect(records()[0]!.usage).not.toHaveProperty("totalTokens");
+    expect(records()[0]).not.toHaveProperty("role");
   });
 
   it("does not accept SDK-invented zeros for partially reported compatible usage", async () => {
@@ -347,9 +399,10 @@ describe("provider usage logging", () => {
       {text: "ok", usage: rawUsage},
     ];
     await expect(
-      compatible("target-route", 1).getTextResponse(request)
+      compatible("target-route", 1, "target").getTextResponse(request)
     ).resolves.toBe("ok");
     expect(calls).toBe(2);
+    expect(records().map(row => row.role)).toEqual(["target", "target"]);
     expect(records()[0]).toMatchObject({
       outcome: "error",
       usageStatus: "missing",
@@ -398,7 +451,7 @@ describe("provider usage logging", () => {
     async modelId => {
       replies = [{text: '{"answer":"ok"}', usage: gatewayUsage}];
       await expect(
-        gateway(modelId).getStructuredResponse({
+        gateway(modelId, 0, "judge").getStructuredResponse({
           ...request,
           outputType: v.object({answer: v.string()}),
         })
@@ -408,6 +461,7 @@ describe("provider usage logging", () => {
           modelId,
           model: "resolved-gateway-model",
           label: "judge-route",
+          role: "judge",
           callKind: "structured",
           usageStatus: "complete",
           usage: {
