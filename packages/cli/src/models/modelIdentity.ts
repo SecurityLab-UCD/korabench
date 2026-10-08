@@ -156,10 +156,10 @@ export function resolveTerminalModelIdentity(
   modelsJsonPath: string,
   env: PublicEnvironment = process.env
 ): PublicModelIdentity {
-  const config = resolveModelConfig(modelsJsonPath, "bigmodel-glm-5");
+  const config = resolveModelConfig(modelsJsonPath, "bigmodel-glm-5.3");
   if (
     !isOpenAICompatibleConfig(config) ||
-    config.model !== "glm-5" ||
+    config.model !== "glm-5.3" ||
     config.maxTokens !== 16000 ||
     config.supportsStructuredOutputs !== false ||
     config.baseURLEnv !== "GLM_BASE_URL" ||
@@ -169,7 +169,7 @@ export function resolveTerminalModelIdentity(
   }
   return resolvePublicModelIdentity(
     modelsJsonPath,
-    "bigmodel-glm-5",
+    "bigmodel-glm-5.3",
     "judge",
     env
   );

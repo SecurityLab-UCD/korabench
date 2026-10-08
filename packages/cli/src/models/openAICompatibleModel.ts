@@ -183,7 +183,7 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
         // The hosted terminal route is frozen to its configured API model ID;
         // self-hosted root/served-model discovery must not silently reroute it.
         const resolvedId =
-          target.label === "bigmodel-glm-5"
+          target.label === "bigmodel-glm-5.3"
             ? target.modelId
             : await resolveModelIdCached(target);
         return buildLanguageModel(target, resolvedId);

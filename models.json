@@ -153,9 +153,9 @@
     "model": "zai/glm-5",
     "maxTokens": 16000
   },
-  "bigmodel-glm-5": {
+  "bigmodel-glm-5.3": {
     "provider": "openai-compatible",
-    "model": "glm-5",
+    "model": "glm-5.3",
     "baseURLEnv": "GLM_BASE_URL",
     "apiKeyEnv": "GLM_API_KEY",
     "maxTokens": 16000,

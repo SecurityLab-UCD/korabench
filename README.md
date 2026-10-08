@@ -161,17 +161,22 @@ generation identity rejects reuse. Provider token usage uses the same
 
 ### Direct BigModel terminal judging
 
-`--judges bigmodel-glm-5 --skip-mechanisms` selects the dedicated direct
-OpenAI-compatible GLM-5 route, with `GLM_API_KEY` and `GLM_BASE_URL` required
+`--judges bigmodel-glm-5.3 --skip-mechanisms` selects the dedicated direct
+OpenAI-compatible GLM-5.3 route, with `GLM_API_KEY` and `GLM_BASE_URL` required
 in the process environment. The output cap is 16,000 tokens and strict
 server-side JSON Schema support is not assumed. Returned grades still
 must pass KoraBench's existing assessment schema; invalid grades are errors,
-never substituted scores. The API model ID stays `glm-5` rather than being
+never substituted scores. The API model ID stays `glm-5.3` rather than being
 remapped through self-hosted model discovery.
 
 This route does not modify `OPENAI_API_KEY` or `OPENAI_BASE_URL`, and the
 existing gateway `glm-5:limited` remains unchanged. Authentication and live
 grading reliability require separate authorized verification.
+The Coding Plan endpoint is `https://open.bigmodel.cn/api/coding/paas/v4`;
+the standard metered endpoint does not consume subscription quota. Use only
+the endpoint permitted by your subscription agreement and freeze it in the
+judge identity. Published token rates are reference usage values, not
+observed subscription charges or quota.
 
 ### `reassess`
 
