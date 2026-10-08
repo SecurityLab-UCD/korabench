@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `kora generate-conversations`: judge-free conversation generation with
+  validated, atomically persisted transcripts, identity-checked restart and
+  existing provider usage accounting.
+- `bigmodel-glm-5`: direct GLM-5 terminal judge through `GLM_API_KEY` and
+  `GLM_BASE_URL`, with a 16,000-token cap and strict local grade validation.
 - `kora run --skip-mechanisms`: grade the safety call only. The mechanism
   judge call is skipped; per-test results omit `mechanismAssessment` and run
   sums carry no mechanisms. The safety call and its prompt are unchanged.

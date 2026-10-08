@@ -25,6 +25,8 @@
 // enabled). Gateway-routed OpenAI models are still addressed by their named
 // entries in `models.json` (e.g., `gpt-4o`, `gpt-5.2:high`).
 
+import {resolvePublicProviderEndpoint} from "./publicModelRoute.js";
+
 export interface OpenAICompatibleProvider {
   /** The prefix used in slugs, e.g., "vllm". */
   readonly prefix: string;
@@ -111,17 +113,9 @@ export interface ResolvedConnection {
  * env var is missing.
  */
 export function resolveProviderConnection(
-  provider: OpenAICompatibleProvider
+  provider: OpenAICompatibleProvider,
+  baseURL: string = resolvePublicProviderEndpoint(provider)
 ): ResolvedConnection {
-  const baseURLFromEnv = process.env[provider.baseURLEnv]?.trim();
-  const baseURL = baseURLFromEnv || provider.defaultBaseURL;
-  if (!baseURL) {
-    throw new Error(
-      `Provider "${provider.prefix}" requires env var ${provider.baseURLEnv} ` +
-        `to be set (no default base URL).`
-    );
-  }
-
   const apiKeyFromEnv = process.env[provider.apiKeyEnv]?.trim();
   if (!apiKeyFromEnv && !provider.apiKeyOptional) {
     throw new Error(
@@ -130,7 +124,7 @@ export function resolveProviderConnection(
   }
 
   return {
-    baseURL: baseURL.replace(/\/+$/, ""),
+    baseURL,
     apiKey: apiKeyFromEnv || "EMPTY",
   };
 }

@@ -13,7 +13,12 @@ import {
   PinnedDemographics,
 } from "./allocation/allocatePersonas.js";
 import {makeRng, shuffleWith} from "./allocation/rng.js";
-import {Benchmark, JudgeModel, TraceEvent} from "./benchmark.js";
+import {
+  Benchmark,
+  GenerationContext,
+  JudgeModel,
+  TraceEvent,
+} from "./benchmark.js";
 import {
   generateFirstUserMessage,
   generateNextUserMessage,
@@ -176,6 +181,69 @@ export async function runJudges(
     mechanismAssessment,
     judgeAssessments,
   };
+}
+
+export interface GeneratedConversation {
+  scenario: Scenario;
+  prompt: ScenarioPrompt;
+  messages: readonly ModelMessage[];
+}
+
+/** Generate the shared conversation transcript without constructing or invoking judges. */
+export async function generateConversation(
+  c: GenerationContext,
+  scenario: Scenario,
+  keyString: string,
+  startMessages?: readonly ModelMessage[]
+): Promise<GeneratedConversation> {
+  const key = ScenarioKey.ofString(keyString);
+  const riskCategory = RiskCategory.find(scenario.seed.riskCategoryId);
+  const risk = RiskCategory.findRisk(riskCategory, scenario.seed.riskId);
+  const promptAgeRange = ScenarioKey.toAgeRange(key);
+  if (startMessages && startMessages.length % 2 !== 0) {
+    throw new Error(
+      `runTest startMessages must contain complete user/assistant pairs (got length ${startMessages.length}).`
+    );
+  }
+  const flavor = scenario.seed.scenarioFlavorId
+    ? risk.scenarioFlavors?.find(f => f.id === scenario.seed.scenarioFlavorId)
+    : undefined;
+  const conversationLength =
+    flavor?.conversationLength ?? risk.conversationLength;
+  const messages: ModelMessage[] = startMessages ? [...startMessages] : [];
+  const startTurn = messages.length / 2;
+  for (let i = startTurn; i < conversationLength; i++) {
+    const tUserMessage = Date.now();
+    const userMessage =
+      i === 0
+        ? scenario.firstUserMessage
+        : await generateNextUserMessage(c, risk, scenario, messages);
+    c.trace?.({
+      phase: "user_message",
+      turn: i,
+      durationMs: Date.now() - tUserMessage,
+    });
+    messages.push({role: "user", content: userMessage});
+    const tAssistant = Date.now();
+    const targetMessages: ModelMessage[] = [...messages];
+    if (key.prompt !== "none") {
+      const modelPrompt = conversationToNextMessagePrompt({
+        ageRange: promptAgeRange,
+        modelMemory: scenario.modelMemory,
+        prompt: key.prompt,
+        soulBody: c.soulBody,
+      });
+      targetMessages.unshift({role: "system", content: modelPrompt.input});
+    }
+    const {output} = await c.getAssistantResponse({messages: targetMessages});
+    c.trace?.({
+      phase: "assistant_response",
+      turn: i,
+      durationMs: Date.now() - tAssistant,
+    });
+    messages.push({role: "assistant", content: output});
+  }
+  return {scenario, prompt: key.prompt, messages};
 }
 
 export const kora = Benchmark.new({
@@ -463,81 +531,12 @@ export const kora = Benchmark.new({
     );
   },
   async runTest(c, scenario, keyString, startMessages) {
-    const key = ScenarioKey.ofString(keyString);
-    const riskCategory = RiskCategory.find(scenario.seed.riskCategoryId);
-    const risk = RiskCategory.findRisk(riskCategory, scenario.seed.riskId);
-    const prompt = key.prompt;
-    const promptAgeRange = ScenarioKey.toAgeRange(key);
-
-    if (startMessages && startMessages.length % 2 !== 0) {
-      throw new Error(
-        `runTest startMessages must contain complete user/assistant pairs (got length ${startMessages.length}).`
-      );
-    }
-
-    const flavor = scenario.seed.scenarioFlavorId
-      ? risk.scenarioFlavors?.find(f => f.id === scenario.seed.scenarioFlavorId)
-      : undefined;
-    const conversationLength =
-      flavor?.conversationLength ?? risk.conversationLength;
-
-    // Multi-turn conversation.
-    const messages: ModelMessage[] = startMessages ? [...startMessages] : [];
-    const startTurn = messages.length / 2;
-
-    for (let i = startTurn; i < conversationLength; i++) {
-      const tUserMessage = Date.now();
-      const userMessage = await (() => {
-        if (i === 0) {
-          return scenario.firstUserMessage;
-        }
-
-        return generateNextUserMessage(c, risk, scenario, messages);
-      })();
-      c.trace?.({
-        phase: "user_message",
-        turn: i,
-        durationMs: Date.now() - tUserMessage,
-      });
-
-      // TODO: Maybe assert refusal of user model.
-
-      messages.push({
-        role: "user",
-        content: userMessage,
-      });
-
-      const tAssistant = Date.now();
-      const modelMessage = await (async () => {
-        // Prompt "none" sends the bare conversation: no system message, on
-        // every target turn (including continuation from startMessages).
-        const targetMessages: ModelMessage[] = [...messages];
-        if (key.prompt !== "none") {
-          const modelPrompt = conversationToNextMessagePrompt({
-            ageRange: promptAgeRange,
-            modelMemory: scenario.modelMemory,
-            prompt: key.prompt,
-            soulBody: c.soulBody,
-          });
-          targetMessages.unshift({role: "system", content: modelPrompt.input});
-        }
-        const {output} = await c.getAssistantResponse({
-          messages: targetMessages,
-        });
-        return output;
-      })();
-      c.trace?.({
-        phase: "assistant_response",
-        turn: i,
-        durationMs: Date.now() - tAssistant,
-      });
-
-      messages.push({
-        role: "assistant",
-        content: modelMessage,
-      });
-    }
-
+    const {prompt, messages} = await generateConversation(
+      c,
+      scenario,
+      keyString,
+      startMessages
+    );
     return runJudges(c.judgeModels, scenario, prompt, messages, c.trace, {
       skipMechanisms: c.skipMechanisms,
     });

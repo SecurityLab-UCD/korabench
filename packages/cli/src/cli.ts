@@ -13,12 +13,14 @@ import * as v from "valibot";
 import {compareAssessmentsCommand} from "./commands/compareAssessmentsCommand.js";
 import {continueCommand} from "./commands/continueCommand.js";
 import {expandScenariosCommand} from "./commands/expandScenariosCommand.js";
+import {generateConversationsCommand} from "./commands/generateConversationsCommand.js";
 import {generateSeeds} from "./commands/generateSeedsCommand.js";
 import {reassessCommand} from "./commands/reassessCommand.js";
 import {runCommand} from "./commands/runCommand.js";
 import {resolveSoulBodyForPrompts} from "./commands/shared/resolveSoulBody.js";
 import {statsCommand} from "./commands/statsCommand.js";
 import {UsageLogError} from "./models/usageLog.js";
+import {publicErrorClassification} from "./retry.js";
 
 function findConfigFile(filename: string): string {
   let dir = process.cwd();
@@ -332,6 +334,39 @@ program
   });
 
 program
+  .command("generate-conversations")
+  .description(
+    "generate conversation evidence with no safety or mechanism judge"
+  )
+  .argument("<target-model>", "target model to converse with")
+  .argument("[user-model]", "simulated child model", "deepseek-v3.2")
+  .requiredOption(
+    "-i, --input <path>",
+    "conversation scenarios under test JSONL"
+  )
+  .requiredOption("-o, --output <path>", "generation evidence JSON")
+  .option("--prompts <variants>", "comma-separated prompt variants", "none")
+  .option("--concurrency <count>", "parallel conversations", "2")
+  .action((targetModel, userModel, opts) => {
+    const prompts = opts.prompts
+      .split(",")
+      .map(p => v.parse(ScenarioPrompt.io, p.trim()));
+    const concurrency = Number(opts.concurrency);
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw new Error("Generation concurrency must be a positive integer.");
+    }
+    return generateConversationsCommand(
+      modelsJsonPath,
+      targetModel,
+      userModel,
+      opts.input,
+      opts.output,
+      prompts,
+      {concurrency, soulBody: resolveSoulBodyForPrompts(prompts, dataPath)}
+    );
+  });
+
+program
   .command("reassess")
   .description(
     "re-run the judge/assessment step on pre-recorded conversations (skips target + user models)"
@@ -518,7 +553,7 @@ program
   );
 
 program.parseAsync().catch((error: unknown) => {
-  console.error(error);
+  console.error(publicErrorClassification(error));
   // EX_CANTCREAT distinguishes fatal accounting failure from retryable runs.
   process.exitCode = error instanceof UsageLogError ? 73 : 1;
 });

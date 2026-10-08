@@ -35,16 +35,16 @@ export type TraceEvent =
   | {phase: "judge"; slug: string; durationMs: number}
   | {phase: "judges"; durationMs: number; judgeCount: number};
 
-export interface TestContext {
+export interface GenerationContext {
   getUserResponse: (request: ModelRequest) => Promise<ModelResponse>;
   getAssistantResponse: (request: ModelRequest) => Promise<ModelResponse>;
+  trace?: (event: TraceEvent) => void;
+  soulBody?: string;
+}
+
+export interface TestContext extends GenerationContext {
   /** Record of judge model slug → callable judge model. */
   judgeModels: Record<string, JudgeModel>;
-  /** Optional observability hook. No-op when undefined. */
-  trace?: (event: TraceEvent) => void;
-  /** Verbatim system prompt body for the "soul" prompt variant. Required
-   * when any test key in this run has prompt="soul"; ignored otherwise. */
-  soulBody?: string;
   /** Grade the safety call only: skip the mechanism judge call, so test
    * results carry no `mechanismAssessment` and run sums no mechanisms. */
   skipMechanisms?: boolean;

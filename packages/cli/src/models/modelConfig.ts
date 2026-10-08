@@ -1,4 +1,3 @@
-import {memoize} from "@korabench/core";
 import * as fs from "node:fs";
 import * as v from "valibot";
 
@@ -79,18 +78,18 @@ function validateOpenAICompatibleConfig(
   }
 }
 
-export const loadModelRegistry = memoize(
-  (modelsJsonPath: string): Record<string, ModelConfig> => {
-    const raw = fs.readFileSync(modelsJsonPath, "utf-8");
-    const parsed = v.parse(VModelRegistry, JSON.parse(raw));
-    for (const [name, config] of Object.entries(parsed)) {
-      if (isOpenAICompatibleConfig(config)) {
-        validateOpenAICompatibleConfig(name, config);
-      }
+export function loadModelRegistry(
+  modelsJsonPath: string
+): Record<string, ModelConfig> {
+  const raw = fs.readFileSync(modelsJsonPath, "utf-8");
+  const parsed = v.parse(VModelRegistry, JSON.parse(raw));
+  for (const [name, config] of Object.entries(parsed)) {
+    if (isOpenAICompatibleConfig(config)) {
+      validateOpenAICompatibleConfig(name, config);
     }
-    return parsed;
   }
-);
+  return parsed;
+}
 
 export function resolveModelConfig(
   modelsJsonPath: string,

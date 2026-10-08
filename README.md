@@ -137,6 +137,42 @@ By default a single judge (`gpt-5.2:medium:limited`) grades every conversation, 
 
 All commands write to `data/` by default. Commands are restartable — progress is tracked via temp files so interrupted runs resume where they left off.
 
+### `generate-conversations`
+
+Generate conversation evidence without constructing or invoking a safety or mechanism judge:
+
+```bash
+yarn kora generate-conversations <target-model> [user-model] \
+  --input scenarios.jsonl --output conversations.json --prompts none
+```
+
+Input and output paths are required. `--concurrency` defaults to 2. Use
+`--prompts soul` with `SOUL_MD_PATH` for a policy-conditioned conversation;
+`none` sends no target system policy. The command reuses the conversation
+loop used by `run`, but has no judge option or safety-grade output.
+
+The validated `korabench-generation-v1` output contains the target/user model
+labels and real `{scenario, prompt, messages}` records. Successful records
+are atomically persisted as they finish. A failed conversation leaves the
+output explicitly partial and the command exits with an error. Restarting
+the same input and policy preserves completed records; changing their
+generation identity rejects reuse. Provider token usage uses the same
+`KORA_USAGE_LOG_PATH` accounting as `run`.
+
+### Direct BigModel terminal judging
+
+`--judges bigmodel-glm-5 --skip-mechanisms` selects the dedicated direct
+OpenAI-compatible GLM-5 route, with `GLM_API_KEY` and `GLM_BASE_URL` required
+in the process environment. The output cap is 16,000 tokens and strict
+server-side JSON Schema support is not assumed. Returned grades still
+must pass KoraBench's existing assessment schema; invalid grades are errors,
+never substituted scores. The API model ID stays `glm-5` rather than being
+remapped through self-hosted model discovery.
+
+This route does not modify `OPENAI_API_KEY` or `OPENAI_BASE_URL`, and the
+existing gateway `glm-5:limited` remains unchanged. Authentication and live
+grading reliability require separate authorized verification.
+
 ### `reassess`
 
 Re-runs only the judge/assessment step on pre-recorded conversations. Useful for scoring exported prod transcripts under a new judge configuration without re-invoking the target or user models.

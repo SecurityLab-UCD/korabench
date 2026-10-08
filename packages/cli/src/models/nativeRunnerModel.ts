@@ -1,5 +1,6 @@
 import {ModelRequest, TypedModelRequest} from "@korabench/core";
 import {randomUUID} from "node:crypto";
+import {publicErrorClassification} from "../retry.js";
 import {Model} from "./model.js";
 
 const KORA_APP_PREFIX = "kora-app-";
@@ -136,7 +137,7 @@ export function createNativeRunnerModel(
         });
       } catch (err) {
         console.error(
-          `native-runner DELETE /sessions/${id} failed: ${err instanceof Error ? err.message : err}`
+          `native-runner DELETE /sessions/${id} failed: ${publicErrorClassification(err)}`
         );
       }
     },

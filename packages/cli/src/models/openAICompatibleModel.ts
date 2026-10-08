@@ -14,6 +14,10 @@ import {
   ParsedProviderSlug,
   resolveProviderConnection,
 } from "./openAICompatibleProviders.js";
+import {
+  resolvePublicCompatibleConfig,
+  resolvePublicCompatibleSlug,
+} from "./publicModelRoute.js";
 import {UsageLogError, withUsageLogging} from "./usageLog.js";
 
 // Self-hosted models (vLLM, sglang, ...) running large/thinking models can take
@@ -44,29 +48,12 @@ function fromParsedSlug(
   parsed: ParsedProviderSlug,
   slug: string
 ): ResolvedTarget {
-  const conn = resolveProviderConnection(parsed.provider);
-  // Optional `<PREFIX>_MAX_TOKENS` cap. Useful for thinking/reasoning models
-  // where unbounded generation can otherwise stall a benchmark.
-  const maxTokensEnv = `${parsed.provider.prefix.toUpperCase()}_MAX_TOKENS`;
-  const maxTokensRaw = process.env[maxTokensEnv]?.trim();
-  const maxTokens = maxTokensRaw
-    ? Number.parseInt(maxTokensRaw, 10)
-    : undefined;
-  if (maxTokensRaw && (!Number.isFinite(maxTokens) || maxTokens! <= 0)) {
-    throw new Error(
-      `${maxTokensEnv} must be a positive integer (got: ${maxTokensRaw}).`
-    );
-  }
+  const route = resolvePublicCompatibleSlug(parsed);
+  const conn = resolveProviderConnection(parsed.provider, route.baseURL);
   return {
+    ...route,
     label: slug,
-    modelId: parsed.modelId,
-    baseURL: conn.baseURL,
     apiKey: conn.apiKey,
-    maxTokens,
-    temperature: undefined,
-    providerOptions: undefined,
-    supportsStructuredOutputs:
-      parsed.provider.supportsStructuredOutputs ?? false,
   };
 }
 
@@ -74,18 +61,12 @@ function fromConfig(
   slug: string,
   config: OpenAICompatibleModelConfig
 ): ResolvedTarget {
-  const baseURL =
-    config.baseURL ?? readEnv(config.baseURLEnv!, slug, "baseURLEnv");
+  const route = resolvePublicCompatibleConfig(slug, config);
   const apiKey = config.apiKey ?? readEnv(config.apiKeyEnv!, slug, "apiKeyEnv");
   return {
+    ...route,
     label: slug,
-    modelId: config.model,
-    baseURL: baseURL.replace(/\/+$/, ""),
     apiKey,
-    maxTokens: config.maxTokens,
-    temperature: config.temperature,
-    providerOptions: config.providerOptions,
-    supportsStructuredOutputs: config.supportsStructuredOutputs ?? false,
   };
 }
 
@@ -199,7 +180,12 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
   function getLanguageModel(): Promise<LanguageModelV3> {
     if (!languageModelPromise) {
       languageModelPromise = (async () => {
-        const resolvedId = await resolveModelIdCached(target);
+        // The hosted terminal route is frozen to its configured API model ID;
+        // self-hosted root/served-model discovery must not silently reroute it.
+        const resolvedId =
+          target.label === "bigmodel-glm-5"
+            ? target.modelId
+            : await resolveModelIdCached(target);
         return buildLanguageModel(target, resolvedId);
       })();
       // Forget a rejected build so a retry can re-resolve.
@@ -326,7 +312,8 @@ function buildModel(target: ResolvedTarget, options?: ModelOptions): Model {
                 : String(primaryError);
             throw new Error(
               `Structured output failed for ${target.label}. ` +
-                `Primary error: ${initial}. Fallback parse error: ${detail}.`
+                `Primary error: ${initial}. Fallback parse error: ${detail}.`,
+              {cause: fallbackError}
             );
           }
         }, retryOptions);

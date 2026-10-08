@@ -1,4 +1,5 @@
 import {Command} from "@commander-js/extra-typings";
+import {RiskCategory, Scenario} from "@korabench/benchmark";
 import type * as AI from "ai";
 import {spawn} from "node:child_process";
 import * as fs from "node:fs";
@@ -171,6 +172,7 @@ describe("provider usage logging", () => {
     server = createServer((incoming, response) => {
       incoming.resume();
       response.setHeader("Content-Type", "application/json");
+      response.setHeader("retry-after", "0");
       response.setHeader("x-private-header", "private-header-value");
       if (incoming.url === "/models") {
         response.end(JSON.stringify({data: [{id: "requested-model"}]}));
@@ -589,21 +591,42 @@ describe("provider usage logging", () => {
     expect(disposed).toEqual(["errored"]);
   });
 
-  it("exits the actual CLI with code 73 instead of returning a retryable partial run", async () => {
-    const fixture = commandFixture();
-    fs.mkdirSync(logPath);
-    const cli = path.resolve(import.meta.dirname, "../../build/src/cli.js");
-    const result = await new Promise<{code: number | null; stderr: string}>(
-      (resolve, reject) => {
+  it.each([400, 503])(
+    "keeps generation survivors and accounting without exposing provider errors (%i)",
+    async status => {
+      const fixture = commandFixture();
+      const marker = "credential-echo-private-api-key";
+      const first = v.parse(
+        Scenario.io,
+        JSON.parse(fs.readFileSync(fixture.scenarios, "utf8").split("\n")[0]!)
+      );
+      const category = RiskCategory.find(first.seed.riskCategoryId);
+      const risk = RiskCategory.findRisk(category, first.seed.riskId);
+      const flavor = risk.scenarioFlavors?.find(
+        item => item.id === first.seed.scenarioFlavorId
+      );
+      const successfulCalls =
+        2 * (flavor?.conversationLength ?? risk.conversationLength) - 1;
+      replies = [
+        ...Array.from({length: successfulCalls}, () => ({
+          text: "surviving response",
+          usage: rawUsage,
+        })),
+        {text: `${status} ${marker}`, status},
+      ];
+      const cli = path.resolve(import.meta.dirname, "../../build/src/cli.js");
+      const result = await new Promise<{
+        code: number | null;
+        stdout: string;
+        stderr: string;
+      }>((resolve, reject) => {
         const child = spawn(
           process.execPath,
           [
             cli,
-            "run",
+            "generate-conversations",
             "target-route",
             "user-route",
-            "--judges",
-            "judge-route",
             "--input",
             fixture.scenarios,
             "--output",
@@ -614,21 +637,91 @@ describe("provider usage logging", () => {
           {
             cwd: directory,
             env: {...process.env},
-            stdio: ["ignore", "ignore", "pipe"],
+            stdio: ["ignore", "pipe", "pipe"],
           }
         );
+        let stdout = "";
         let stderr = "";
+        child.stdout.setEncoding("utf8");
         child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
         child.stderr.on("data", (chunk: string) => {
           stderr += chunk;
         });
         child.on("error", reject);
-        child.on("close", code => resolve({code, stderr}));
-      }
-    );
-    expect(result.code, result.stderr).toBe(73);
-    expect(result.stderr).toContain("Cannot persist KORA usage accounting");
-    expect(calls).toBe(1);
-    expect(result.stderr).not.toContain("private-api-key");
-  }, 20000);
+        child.on("close", code => resolve({code, stdout, stderr}));
+      });
+      expect(result.code).toBe(1);
+      expect(result.stdout + result.stderr).not.toContain(marker);
+      expect(result.stdout + result.stderr).not.toContain("private-api-key");
+      const evidence = JSON.parse(fs.readFileSync(fixture.output, "utf8"));
+      expect(evidence.results).toHaveLength(1);
+      expect(evidence.results[0].messages[1].content).toBe(
+        "surviving response"
+      );
+      const rows = records();
+      expect(rows).toHaveLength(calls);
+      expect(rows[0]).toMatchObject({
+        outcome: "response",
+        usageStatus: "complete",
+        usage: {inputTokens: 100, outputTokens: 20, totalTokens: 120},
+      });
+      const errors = rows.filter(row => row.outcome === "error");
+      expect(errors).toHaveLength(status === 503 ? 6 : 1);
+      expect(result.stderr.split("Retry ").length - 1).toBe(
+        status === 503 ? 5 : 0
+      );
+      expect(fs.readFileSync(logPath, "utf8")).not.toContain(marker);
+    },
+    60000
+  );
+
+  it.each(["run", "generate-conversations"])(
+    "exits the actual %s CLI with code 73 on accounting failure",
+    async command => {
+      const fixture = commandFixture();
+      fs.mkdirSync(logPath);
+      const cli = path.resolve(import.meta.dirname, "../../build/src/cli.js");
+      const result = await new Promise<{code: number | null; stderr: string}>(
+        (resolve, reject) => {
+          const child = spawn(
+            process.execPath,
+            [
+              cli,
+              command,
+              "target-route",
+              "user-route",
+              ...(command === "run"
+                ? ["--judges", "judge-route"]
+                : ["--prompts", "none"]),
+              "--input",
+              fixture.scenarios,
+              "--output",
+              fixture.output,
+              "--concurrency",
+              "1",
+            ],
+            {
+              cwd: directory,
+              env: {...process.env},
+              stdio: ["ignore", "ignore", "pipe"],
+            }
+          );
+          let stderr = "";
+          child.stderr.setEncoding("utf8");
+          child.stderr.on("data", (chunk: string) => {
+            stderr += chunk;
+          });
+          child.on("error", reject);
+          child.on("close", code => resolve({code, stderr}));
+        }
+      );
+      expect(result.code, result.stderr).toBe(73);
+      expect(calls).toBe(1);
+      expect(result.stderr).not.toContain("private-api-key");
+    },
+    20000
+  );
 });

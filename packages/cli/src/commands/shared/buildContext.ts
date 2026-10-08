@@ -1,4 +1,9 @@
-import {JudgeModel, Scenario, TestContext} from "@korabench/benchmark";
+import {
+  GenerationContext,
+  JudgeModel,
+  Scenario,
+  TestContext,
+} from "@korabench/benchmark";
 import * as R from "remeda";
 import {createModel} from "../../models/createModel.js";
 import {createCustomModel} from "../../models/customModel.js";
@@ -6,11 +11,15 @@ import {Model} from "../../models/model.js";
 import {isNativeRunnerSlug} from "../../models/nativeRunnerModel.js";
 import {isWebRunnerSlug} from "../../models/webRunnerModel.js";
 
-export interface BuiltContext {
-  context: TestContext;
+export interface BuiltGenerationContext {
+  context: GenerationContext;
   /** Tear down the target model (e.g., release the web-runner browser
    * session). Always safe to call; idempotent. */
   dispose: (outcome: "completed" | "errored") => Promise<void>;
+}
+
+export interface BuiltContext extends BuiltGenerationContext {
+  context: TestContext;
 }
 
 export async function buildContext(
@@ -21,6 +30,36 @@ export async function buildContext(
   scenario: Scenario,
   soulBody?: string
 ): Promise<BuiltContext> {
+  const built = await buildGenerationContext(
+    userModel,
+    targetModelSlug,
+    targetGatewayModel,
+    scenario,
+    soulBody
+  );
+  return {
+    ...built,
+    context: {
+      ...built.context,
+      judgeModels: R.mapValues(
+        judgeModels,
+        (model: Model): JudgeModel => ({
+          getResponse: async request => ({
+            output: await model.getStructuredResponse(request),
+          }),
+        })
+      ),
+    },
+  };
+}
+
+export async function buildGenerationContext(
+  userModel: Model,
+  targetModelSlug: string,
+  targetGatewayModel: Model | undefined,
+  scenario: Scenario,
+  soulBody?: string
+): Promise<BuiltGenerationContext> {
   const targetModel = await (async () => {
     if (targetGatewayModel) {
       return targetGatewayModel;
@@ -29,21 +68,13 @@ export async function buildContext(
     return createCustomModel(targetModelSlug, scenario);
   })();
 
-  const context: TestContext = {
+  const context: GenerationContext = {
     getUserResponse: async request => ({
       output: await userModel.getTextResponse(request),
     }),
     getAssistantResponse: async request => ({
       output: await targetModel.getTextResponse(request),
     }),
-    judgeModels: R.mapValues(
-      judgeModels,
-      (model: Model): JudgeModel => ({
-        getResponse: async request => ({
-          output: await model.getStructuredResponse(request),
-        }),
-      })
-    ),
     soulBody,
   };
 

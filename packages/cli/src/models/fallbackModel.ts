@@ -1,4 +1,5 @@
 import {ModelRequest, TypedModelRequest} from "@korabench/core";
+import {publicErrorClassification} from "../retry.js";
 import {Model} from "./model.js";
 import {UsageLogError} from "./usageLog.js";
 
@@ -29,15 +30,15 @@ export function createFallbackModel(models: readonly LabeledModel[]): Model {
       } catch (error) {
         if (error instanceof UsageLogError) throw error;
         lastError = error;
-        const message = error instanceof Error ? error.message : String(error);
+        const classification = publicErrorClassification(error);
         const next = models[i + 1];
         if (next) {
           console.error(
-            `[fallback] ${method} on ${current.label} exhausted retries; failing over to ${next.label}: ${message.slice(0, 200)}`
+            `[fallback] ${method} on ${current.label} exhausted retries; failing over to ${next.label}: ${classification}`
           );
         } else {
           console.error(
-            `[fallback] ${method} exhausted on final model ${current.label}: ${message.slice(0, 200)}`
+            `[fallback] ${method} exhausted on final model ${current.label}: ${classification}`
           );
         }
       }

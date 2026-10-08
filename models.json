@@ -121,7 +121,7 @@
     "maxTokens": 26000,
     "providerOptions": {
       "deepseek": {
-        "thinking": { "type": "enabled" }
+        "thinking": {"type": "enabled"}
       }
     }
   },
@@ -152,6 +152,14 @@
   "glm-5:limited": {
     "model": "zai/glm-5",
     "maxTokens": 16000
+  },
+  "bigmodel-glm-5": {
+    "provider": "openai-compatible",
+    "model": "glm-5",
+    "baseURLEnv": "GLM_BASE_URL",
+    "apiKeyEnv": "GLM_API_KEY",
+    "maxTokens": 16000,
+    "supportsStructuredOutputs": false
   },
   "openai-direct-gpt-5.6-luna": {
     "provider": "openai-compatible",

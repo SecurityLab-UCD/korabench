@@ -213,6 +213,19 @@ export async function withRetry<T>(
   throw lastError ?? new Error("Retry failed with no error");
 }
 
+/** Public diagnostics never include provider-controlled error content. */
+export function publicErrorClassification(
+  error: unknown
+):
+  | "usage_accounting_failure"
+  | "retryable_provider_failure"
+  | "operation_failure" {
+  if (error instanceof UsageLogError) return "usage_accounting_failure";
+  return isRetryableError(error)
+    ? "retryable_provider_failure"
+    : "operation_failure";
+}
+
 /**
  * Creates a default onRetry handler that logs to stderr.
  */
@@ -223,7 +236,7 @@ export function createLogRetryHandler(
     const prefix = context ? `[${context}] ` : "";
     const delaySeconds = (delayMs / 1000).toFixed(1);
     console.error(
-      `${prefix}Retry ${attempt}: ${error.message}. Waiting ${delaySeconds}s...`
+      `${prefix}Retry ${attempt}: ${publicErrorClassification(error)}. Waiting ${delaySeconds}s...`
     );
   };
 }
