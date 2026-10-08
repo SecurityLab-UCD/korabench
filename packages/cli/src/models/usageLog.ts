@@ -161,7 +161,6 @@ export function withUsageLogging(
     role: context.role,
     callKind: context.callKind,
   };
-
   return wrapLanguageModel({
     model,
     middleware: {
@@ -169,6 +168,7 @@ export function withUsageLogging(
       async wrapGenerate({doGenerate}) {
         const failure = failedUsageLogs.get(logPath);
         if (failure) throw failure;
+
         let result: LanguageModelV3GenerateResult;
         try {
           result = await doGenerate();
